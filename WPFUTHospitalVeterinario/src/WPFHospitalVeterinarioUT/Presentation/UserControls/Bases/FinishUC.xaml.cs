@@ -53,7 +53,7 @@ namespace Presentation.UserControls.Bases
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
 
-            StopVideoRecording();
+            await StopVideoRecording();
 
             nameUser.Text = "Feliz día " + CapitaliceWord(FindShortWord(_ts.customFlows.generaLInformationClient.FirstName));
             for (int i = 0; i < 5; i++)
@@ -293,54 +293,39 @@ namespace Presentation.UserControls.Bases
         }
         #endregion
 
-        private void StopVideoRecording()
+        private async Task StopVideoRecording()
         {
+            var recorder = _ts.videoRecorder;
+            if (recorder == null)
+                return;
+
             try
             {
-                var _ts = Transaction.Instance;
-                if (_ts != null && _ts.videoRecorder != null)
+                var stopped = await recorder.StopAsync();
+                if (!stopped)
                 {
-                    EventLogger.SaveLog(EventType.Info, "Deteniendo grabación de video en FinishUC (pantalla final)");
-
-                    // Ejecutar en segundo plano para no bloquear la UI
-                    Task.Run(async () =>
-                    {
-                        try
-                        {
-                            // Intentar detener la grabación
-                            bool result = await _ts.videoRecorder.StopAsync();
-                            EventLogger.SaveLog(EventType.Info, $"Resultado de detener grabación en FinishUC: {(result ? "Exitoso" : "Fallido")}");
-
-                            // Si falló el primer intento, intentar de nuevo
-                            if (!result)
-                            {
-                                await Task.Delay(500);
-                                result = await _ts.videoRecorder.StopAsync();
-                                EventLogger.SaveLog(EventType.Info, $"Segundo intento de detener grabación: {(result ? "Exitoso" : "Fallido")}");
-                            }
-
-                            // Limpiar la referencia al videoRecorder
-                            _ts.videoRecorder = null;
-                        }
-                        catch (Exception ex)
-                        {
-                            EventLogger.SaveLog(EventType.Error, $"Error al detener grabación en FinishUC: {ex.Message}", ex);
-                        }
-                    });
+                    await Task.Delay(500);
+                    stopped = await recorder.StopAsync();
                 }
+
+                if (!stopped)
+                {
+                    EventLogger.SaveLog(EventType.Error,
+                        "No fue posible detener la grabación en la pantalla final.");
+                    return;
+                }
+
+                recorder.Dispose();
+                if (ReferenceEquals(_ts.videoRecorder, recorder))
+                    _ts.videoRecorder = null;
             }
             catch (Exception ex)
             {
-
-                EventLogger.SaveLog(EventType.Error, $"Error general al intentar detener grabación en FinishUC: {ex.Message}", ex);
+                EventLogger.SaveLog(EventType.Error,
+                    "Error deteniendo la grabación en la pantalla final.", ex);
             }
         }
     }
-
-
-
-
-}
 
     public class FinishViewModel : INotifyPropertyChanged
     {
@@ -451,6 +436,4 @@ namespace Presentation.UserControls.Bases
         public Dictionary<string, string> body;
         public Dictionary<string, string> footer;
     }
-
-
-
+}
