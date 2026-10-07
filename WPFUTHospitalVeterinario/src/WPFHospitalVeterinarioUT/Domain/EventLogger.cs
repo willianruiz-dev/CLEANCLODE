@@ -8,13 +8,15 @@ namespace Domain
 {
     public static class EventLogger
     {
+        private static readonly object FileWriteLock = new();
         /// <summary>
         /// Guarda un evento en el log
         /// </summary>
         public static void SaveLog(EventType type, string msg, object? obj = null,
             [CallerMemberName] string method = "", [CallerFilePath] string callerPath = "")
         {
-            var _class = Path.GetFileNameWithoutExtension(callerPath);
+            var className = Path.GetFileNameWithoutExtension(callerPath);
+            var timestamp = DateTime.Now;
             
             int idTransaction = 0;
             try
@@ -25,11 +27,11 @@ namespace Domain
             
             var _event = new LogEvent
             {
-                Date = DateTime.Now,
-                Time = DateTime.Now.ToString("hh:mm:ss.fff tt"),
+                Date = timestamp,
+                Time = timestamp.ToString("hh:mm:ss.fff tt"),
                 IdTransaction = idTransaction,
                 Type = type.ToString(),
-                Class = $"{_class}",
+                Class = className,
                 Method = method,
                 Message = msg,
             };
@@ -77,33 +79,24 @@ namespace Domain
             try
             {
                 var json = JsonConvert.SerializeObject(evt, Formatting.Indented);
-
                 var logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs", folder);
-                if (!Directory.Exists(logDir))
+                var filePath = Path.Combine(logDir, $"Log{evt.Date:yyyy-MM-dd}.json");
+
+                // SaveLog puede ejecutarse desde UI, cola API y periféricos al mismo tiempo.
+                // Una única sección crítica evita líneas intercaladas y archivos bloqueados.
+                lock (FileWriteLock)
                 {
                     Directory.CreateDirectory(logDir);
-                }
-                var fileName = "Log" + DateTime.Now.ToString("yyyy-MM-dd") + ".json";
-                var filePath = Path.Combine(logDir, fileName);
-
-                if (!File.Exists(filePath))
-                {
-                    var archivo = File.CreateText(filePath);
-                    archivo.Close();
+                    File.AppendAllText(filePath, json + Environment.NewLine);
                 }
 
-                using (StreamWriter sw = File.AppendText(filePath))
-                {
-                    sw.WriteLine(json);
-                }
-                
                 return filePath;
             }
             catch (Exception logException)
             {
+                System.Diagnostics.Debug.WriteLine($"No fue posible escribir el log: {logException}");
                 return string.Empty;
             }
-            
         }
        
     }
