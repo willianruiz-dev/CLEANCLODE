@@ -57,11 +57,11 @@ namespace Domain.Peripherals.Recorder
         {
             var transaction = Transaction.Instance;
             var recorder = transaction.videoRecorder;
+
+            // Sin grabador no hay nada que detener. Es el caso normal al abrir la aplicación
+            // o al salir de una pantalla que nunca grabó, así que no se registra en el log.
             if (recorder == null)
-            {
-                EventLogger.SaveLog(EventType.Info, "No hay grabación de video activa para detener.");
                 return true;
-            }
 
             var stopped = false;
             try
