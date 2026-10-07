@@ -107,11 +107,19 @@ namespace WPFHospitalVeterinarioUT.ApiService
 
                 var stored = await GetByDocumentAsync(document).ConfigureAwait(false);
 
-                EventLogger.SaveLog(
-                    stored == null ? EventType.Warning : EventType.Info,
-                    stored == null
-                        ? $"Atención: la API confirmó el guardado del documento {document}, pero una consulta inmediata no lo encuentra registrado."
-                        : $"Verificación: el documento {document} sí quedó registrado en la API UT.");
+                if (stored == null)
+                {
+                    EventLogger.SaveLog(EventType.Warning,
+                        $"Atención: la API confirmó el guardado del documento {document}, pero una consulta inmediata no lo encuentra registrado.");
+                }
+                else
+                {
+                    // Se registra también lo que la API devuelve, para poder ver si los datos
+                    // quedaron completos y no solo si el documento existe.
+                    EventLogger.SaveLog(EventType.Info,
+                        $"Verificación: el documento {document} sí quedó registrado en la API UT. Datos devueltos:",
+                        stored);
+                }
             }
             catch (Exception ex)
             {
