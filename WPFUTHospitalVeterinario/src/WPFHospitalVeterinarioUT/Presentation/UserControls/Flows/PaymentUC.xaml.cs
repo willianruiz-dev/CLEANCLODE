@@ -33,8 +33,6 @@ namespace Presentation.UserControls.Flows
         private Transaction _ts;
         private ArduinoController _peripherals;
         private PaymentViewModel _paymentViewModel;
-        private VideoRecorder _videoRecorder;
-        private bool _isRecording = false;
 
         private bool _isPayCanceled = false;
 
@@ -47,9 +45,6 @@ namespace Presentation.UserControls.Flows
 
             _ts = Transaction.Instance;
             _ts.paymentProcess.DevueltaCorrecta = false;
-
-            _videoRecorder = null;
-            _isRecording = false;
 
 #if NO_PERIPHERALS
             Button dynamicButton = new Button();
@@ -111,7 +106,8 @@ namespace Presentation.UserControls.Flows
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
             InitViewModel();
-            SetupExistingVideoRecorder();
+            EventLogger.SaveLog(EventType.Info,
+                $"Estado de la grabación de video al iniciar el pago: {(RecordingService.Instance.IsRecording ? "activa" : "inactiva")}");
             
 #if NO_PERIPHERALS
 #else
@@ -119,27 +115,6 @@ namespace Presentation.UserControls.Flows
 #endif
         }
         
-        private void SetupExistingVideoRecorder()
-        {
-            try
-            {
-                // Solo obtener referencia al VideoRecorder existente desde ReferenceToPayUC
-                if (_ts.videoRecorder != null)
-                {
-                    _videoRecorder = _ts.videoRecorder;
-                    _isRecording = _videoRecorder.IsRecording;
-                    EventLogger.SaveLog(EventType.Info, $"Usando VideoRecorder existente. Estado grabación: {_isRecording}");
-                }
-                else
-                {
-                    EventLogger.SaveLog(EventType.Warning, "No se encontró VideoRecorder existente desde ReferenceToPayUC");
-                }
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error, $"Error al configurar VideoRecorder existente: {ex.Message}", ex);
-            }
-        }
         private void InitViewModel()
         {
 
@@ -181,7 +156,7 @@ namespace Presentation.UserControls.Flows
             // hardware ya lo aceptó físicamente. Si no lo contamos, el
             // dinero queda atrapado en la máquina sin devolverse.
             // ═══════════════════════════════════════════════════════════════
-            EventLogger.SaveLog(EventType.Info, $"Recibido dinero: {value}. Grabación de video en curso: {_isRecording}");
+            EventLogger.SaveLog(EventType.Info, $"Recibido dinero: {value}. Grabación de video en curso: {RecordingService.Instance.IsRecording}");
             _paymentViewModel.EnteredAmount += value;
 
             _paymentViewModel.RefreshAmountsList(Convert.ToInt32(value), 1);
@@ -370,51 +345,8 @@ namespace Presentation.UserControls.Flows
 
             try
             {
-                // Detenemos la grabación si está activa
-                if (_isRecording && _videoRecorder != null)
-                {
-                    EventLogger.SaveLog(EventType.Info, "Intentando detener la grabación de video en SavePay...");
-                    
-                    try
-                    {
-                        bool stopResult = await _videoRecorder.StopAsync();
-                        EventLogger.SaveLog(EventType.Info, $"Resultado de detener grabación en SavePay: {(stopResult ? "Exitoso" : "Fallido")}");
-                        
-                        if (!stopResult)
-                        {
-                            await Task.Delay(500);
-                            stopResult = await _videoRecorder.StopAsync();
-                            EventLogger.SaveLog(EventType.Info, $"Segundo intento de detener grabación en SavePay: {(stopResult ? "Exitoso" : "Fallido")}");
-                        }
-                        
-                        _isRecording = false;
-                    }
-                    catch (Exception ex)
-                    {
-                        EventLogger.SaveLog(EventType.Error, $"Error al detener grabación en SavePay: {ex.Message}", ex);
-                    }
-                    finally
-                    {
-                        // Liberar recursos y limpiar referencia
-                        try
-                        {
-                            if (_videoRecorder != null)
-                            {
-                                _videoRecorder.Dispose();
-                                _videoRecorder = null;
-                                _ts.videoRecorder = null;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            EventLogger.SaveLog(EventType.Error, $"Error al liberar recursos de grabación en SavePay: {ex.Message}", ex);
-                        }
-                    }
-                }
-                else
-                {
-                    EventLogger.SaveLog(EventType.Info, $"No hay grabación activa para detener en SavePay. _isRecording={_isRecording}, _videoRecorder={((_videoRecorder == null) ? "nulo" : "no nulo")}");
-                }
+                // El servicio centraliza la parada con reintentos y la liberación de recursos.
+                await RecordingService.Instance.StopAsync();
                 
                 _paymentViewModel.IsPayCompleted = true;
                 _ts.paymentProcess.TotalIngresado = _paymentViewModel.EnteredAmount;
@@ -517,43 +449,7 @@ namespace Presentation.UserControls.Flows
 
         private async Task StopRecordingAndSave()
         {
-            if (_isRecording && _videoRecorder != null)
-            {
-                EventLogger.SaveLog(EventType.Info, "Deteniendo grabacion de video...");
-                try
-                {
-                    bool stopResult = false;
-                    for (int attempt = 1; attempt <= 3; attempt++)
-                    {
-                        stopResult = await _videoRecorder.StopAsync();
-                        EventLogger.SaveLog(EventType.Info, $"Intento {attempt}: {(stopResult ? "Exitoso" : "Fallido")}");
-                        if (stopResult) break;
-                        await Task.Delay(500);
-                    }
-                    _isRecording = false;
-                }
-                catch (Exception ex)
-                {
-                    EventLogger.SaveLog(EventType.Error, $"Error al detener grabacion: {ex.Message}", ex);
-                }
-                finally
-                {
-                    try
-                    {
-                        if (_videoRecorder != null)
-                        {
-                            _videoRecorder.Dispose();
-                            _videoRecorder = null;
-                            _ts.videoRecorder = null;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        EventLogger.SaveLog(EventType.Error, $"Error al liberar grabacion: {ex.Message}", ex);
-                    }
-                }
-            }
-            
+            await RecordingService.Instance.StopAsync();
             await SavePay();
         }
         #endregion

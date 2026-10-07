@@ -18,6 +18,7 @@ using ControlzEx.Standard;
 using Domain;
 using Domain.Peripherals;
 using Domain.UIServices;
+using Domain.Peripherals.Recorder;
 using Presentation.UserControls.Flows;
 using UI.Bases;
 using UI.Modals;
@@ -293,37 +294,9 @@ namespace Presentation.UserControls.Bases
         }
         #endregion
 
-        private async Task StopVideoRecording()
+        private Task StopVideoRecording()
         {
-            var recorder = _ts.videoRecorder;
-            if (recorder == null)
-                return;
-
-            try
-            {
-                var stopped = await recorder.StopAsync();
-                if (!stopped)
-                {
-                    await Task.Delay(500);
-                    stopped = await recorder.StopAsync();
-                }
-
-                if (!stopped)
-                {
-                    EventLogger.SaveLog(EventType.Error,
-                        "No fue posible detener la grabación en la pantalla final.");
-                    return;
-                }
-
-                recorder.Dispose();
-                if (ReferenceEquals(_ts.videoRecorder, recorder))
-                    _ts.videoRecorder = null;
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error,
-                    "Error deteniendo la grabación en la pantalla final.", ex);
-            }
+            return RecordingService.Instance.StopAsync();
         }
     }
 

@@ -183,22 +183,10 @@ namespace Presentation.UserControls.Flows
             }
         }
 
-        private async Task InitializeVideoRecording()
+        private Task InitializeVideoRecording()
         {
-            try
-            {
-                _ts.videoRecorder ??= new VideoRecorder(_ts);
-                var started = await _ts.videoRecorder.StartAsync();
-                EventLogger.SaveLog(
-                    started ? EventType.Info : EventType.Warning,
-                    started
-                        ? "Grabación iniciada antes de crear la transacción."
-                        : "No se pudo iniciar la grabación; la transacción continuará sin video.");
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error, "Error inicializando la grabación de video.", ex);
-            }
+            // Debe iniciar antes de crear la transacción para capturar todo el proceso.
+            return RecordingService.Instance.StartAsync();
         }
 
         public void GoTimer()
