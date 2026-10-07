@@ -40,9 +40,19 @@ namespace Domain.Peripherals
         private const int ReceiptSideMarginPx = 10;
 
         /// <summary>
-        /// Indica que la impresión en curso se está generando como PDF (solo ocurre en DEBUG).
+        /// Indica que la impresión en curso se está generando como PDF con la impresora de Windows
+        /// (solo ocurre en la compilación con NO_PERIPHERALS).
         /// </summary>
         private static bool _printToPdfFile;
+
+        /// <summary>Impresora de Windows usada para generar el PDF cuando se compila con NO_PERIPHERALS.</summary>
+        private const string PdfPrinterName = "Microsoft Print to PDF";
+
+        /// <summary>Carpeta donde se guardan los PDF, relativa a la carpeta del ejecutable.</summary>
+        private const string PdfOutputFolder = "Receipts";
+
+        /// <summary>Abre el PDF generado para poder revisarlo.</summary>
+        private const bool PdfOpenAfterPrint = true;
 
         static PrintService()
         {
@@ -69,11 +79,11 @@ namespace Domain.Peripherals
             {
                 try
                 {
-#if DEBUG
-                    // En DEBUG la tirilla se genera como PDF con la impresora de Windows
-                    // ("Microsoft Print to PDF"), conservando el tamaño de la w80, para poder
-                    // revisarla sin hardware. En Release este camino no se compila.
-                    PrintDebugPdf();
+#if NO_PERIPHERALS
+                    // Compilación sin periféricos (Debug): la tirilla se genera como PDF con la
+                    // impresora de Windows, conservando el tamaño de la w80, para poder revisarla
+                    // sin hardware. En Release este camino no se compila y se usa la w80.
+                    PrintPdf();
 #else
                     _document.Print();
                     var wasSucess = MonitorPrintJobs();
@@ -84,8 +94,8 @@ namespace Domain.Peripherals
                 catch (Exception ex)
                 {
                     EventLogger.SaveLog(EventType.Error, $"Error en la tarea Start de Impresión: {ex.Message}", ex);
-                    // CORRECCION: En debug, no fallar por errores de impresora
-#if DEBUG
+                    // Sin periféricos no hay impresora que reporte el resultado: no se interrumpe el flujo.
+#if NO_PERIPHERALS
                     recentImpressionSuccess = true;
 #endif
                 }
@@ -351,34 +361,28 @@ namespace Domain.Peripherals
             return MillimetersToHundredthsInch(ReceiptWidthMm);
         }
 
-#if DEBUG
+#if NO_PERIPHERALS
         /// <summary>
-        /// Modo DEBUG: la tirilla se manda a la impresora de Windows (por defecto
-        /// "Microsoft Print to PDF") y se guarda como PDF, conservando el ancho y la escala de la
+        /// Compilación sin periféricos: la tirilla se manda a la impresora de Windows
+        /// (Microsoft Print to PDF) y se guarda como PDF, conservando el ancho y la escala de la
         /// tirilla de la w80. En Release este camino no se compila: se sigue usando la w80.
         /// </summary>
-        private static void PrintDebugPdf()
+        private static void PrintPdf()
         {
-            const string DefaultDebugPrinter = "Microsoft Print to PDF";
-
             try
             {
-                var printerName = AppConfig.Get("debugPrinterName");
-                if (string.IsNullOrWhiteSpace(printerName)) printerName = DefaultDebugPrinter;
-
-                _document.PrinterSettings.PrinterName = printerName;
+                _document.PrinterSettings.PrinterName = PdfPrinterName;
                 if (!_document.PrinterSettings.IsValid)
                 {
                     EventLogger.SaveLog(EventType.Warning,
-                        $"Modo DEBUG: la impresora '{printerName}' no está instalada, se omite la impresión de la tirilla.");
+                        $"Sin periféricos: la impresora '{PdfPrinterName}' no está instalada, se omite la impresión de la tirilla.");
                     recentImpressionSuccess = true;
                     return;
                 }
 
-                var outputFolder = AppConfig.Get("debugPrintOutputFolder");
-                if (string.IsNullOrWhiteSpace(outputFolder)) outputFolder = "Receipts";
-                if (!Path.IsPathRooted(outputFolder))
-                    outputFolder = Path.Combine(AppInfo.APP_DIR, outputFolder);
+                var outputFolder = Path.IsPathRooted(PdfOutputFolder)
+                    ? PdfOutputFolder
+                    : Path.Combine(AppInfo.APP_DIR, PdfOutputFolder);
 
                 Directory.CreateDirectory(outputFolder);
                 var filePath = Path.Combine(outputFolder, $"tirilla-{DateTime.Now:yyyyMMdd-HHmmss}.pdf");
@@ -393,10 +397,10 @@ namespace Domain.Peripherals
                 _document.Print();
 
                 EventLogger.SaveLog(EventType.Info,
-                    $"Modo DEBUG: tirilla generada en '{filePath}' con el tamaño de la w80 " +
+                    $"Sin periféricos: tirilla generada en '{filePath}' con el tamaño de la w80 " +
                     $"({paperSize.Width / 100.0:0.##} x {paperSize.Height / 100.0:0.##} pulgadas).");
 
-                OpenDebugPdf(filePath);
+                OpenPdf(filePath);
             }
             catch (Exception ex)
             {
@@ -404,16 +408,15 @@ namespace Domain.Peripherals
             }
             finally
             {
-                // En debug la tirilla no debe interrumpir el flujo del kiosco.
+                // Sin periféricos la tirilla no debe interrumpir el flujo del kiosco.
                 recentImpressionSuccess = true;
             }
         }
 
-        /// <summary>Abre el PDF generado para poder revisarlo (se controla con debugPrintOpenPdf).</summary>
-        private static void OpenDebugPdf(string filePath)
+        /// <summary>Abre el PDF generado para poder revisarlo.</summary>
+        private static void OpenPdf(string filePath)
         {
-            var openPdf = AppConfig.Get("debugPrintOpenPdf");
-            if (!string.Equals(openPdf, "true", StringComparison.OrdinalIgnoreCase)) return;
+            if (!PdfOpenAfterPrint) return;
             if (!File.Exists(filePath)) return;
 
             try
