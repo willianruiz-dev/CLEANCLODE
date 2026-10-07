@@ -54,12 +54,6 @@ namespace WPFHospitalVeterinarioUT.ApiService
             return result != null;
         }
 
-            return await SendAsync<HospitalTransactionDetailDto>(
-                HttpMethod.Post,
-                "TransactionDetail",
-                detail,
-                cancellationToken).ConfigureAwait(false);
-        }
 
         private static async Task<T?> SendAsync<T>(
             HttpMethod method,
