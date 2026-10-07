@@ -3,8 +3,10 @@ using Domain.Variables;
 using System.Diagnostics;
 using System.Globalization;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Printing;
+using System.Drawing.Text;
 using System.IO;
 using System.Printing;
 using System.Runtime.InteropServices;
@@ -47,9 +49,6 @@ namespace Domain.Peripherals
 
         /// <summary>Espacio inferior de la tirilla, en píxeles del diseño.</summary>
         private const int ReceiptBottomMarginPx = 40;
-
-        /// <summary>Margen lateral de la tirilla, en píxeles del diseño.</summary>
-        private const int ReceiptSideMarginPx = 10;
 
         /// <summary>Carpeta donde se guardan los PDF, relativa a la carpeta del ejecutable.</summary>
         private const string PdfOutputFolder = "Receipts";
@@ -250,65 +249,28 @@ namespace Domain.Peripherals
             int pixelHeight = (int)Math.Round(designHeight * ReceiptRenderScale);
 
             var canvas = new Bitmap(pixelWidth, pixelHeight);
-            canvas.SetResolution(ReceiptDesignDpiFloat * (float)ReceiptRenderScale, ReceiptDesignDpiFloat * (float)ReceiptRenderScale);
+
+            // El lienzo se dibuja a 96 ppp, la resolución del diseño: GDI+ convierte las fuentes
+            // (que están en puntos, por ejemplo el 8 de Arial) usando la resolución del lienzo. Si
+            // el lienzo estuviera a 288 ppp, ese 8 se dibujaría 3 veces más grande (8,5 mm en vez
+            // de 2,8 mm) y el texto se saldría de la tirilla y se pisaría entre líneas.
+            // La nitidez la da el ScaleTransform de abajo, no la resolución del lienzo.
+            canvas.SetResolution(ReceiptDesignDpiFloat, ReceiptDesignDpiFloat);
 
             using (var canvasGraphics = Graphics.FromImage(canvas))
             {
                 canvasGraphics.Clear(Color.White);
+                canvasGraphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                canvasGraphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 canvasGraphics.ScaleTransform((float)ReceiptRenderScale, (float)ReceiptRenderScale);
                 DrawReceipt(canvasGraphics);
             }
 
+            // Ya dibujado, se marca la resolución real de la imagen (96 ppp x 3). Es solo el dato
+            // que queda en los metadatos: el dibujo no cambia.
+            canvas.SetResolution((float)CanvasDpi, (float)CanvasDpi);
+
             return canvas;
-        }
-
-        /// <summary>
-        /// Ancho del lienzo, en píxeles del diseño: el ancho de la w80 (80 mm) y, solo si algún
-        /// contenido no cupiera, lo que necesite para no recortarlo.
-        /// </summary>
-        private static int ReceiptCanvasWidthInPixels()
-        {
-            int contentWidth = MeasureReceiptContentWidth();
-
-            return contentWidth <= ReceiptWidthInPixels()
-                ? ReceiptWidthInPixels()
-                : contentWidth + ReceiptSideMarginPx;
-        }
-
-        /// <summary>Ancho que ocupa el contenido de la tirilla, en píxeles del diseño.</summary>
-        private static int MeasureReceiptContentWidth()
-        {
-            int maxWidth = 0;
-
-            var printData = _printData;
-            if (printData == null) return 0;
-
-            using var probe = new Bitmap(1, 1);
-            probe.SetResolution(ReceiptDesignDpiFloat, ReceiptDesignDpiFloat);
-            using var probeGraphics = Graphics.FromImage(probe);
-
-            foreach (var printObj in printData)
-            {
-                int itemWidth = 0;
-
-                if (printObj.QR != null)
-                {
-                    itemWidth = printObj.QR.Width;
-                }
-                else if (!string.IsNullOrEmpty(printObj.Image))
-                {
-                    var (imageWidth, imageHeight) = MeasureImage(printObj.Image);
-                    itemWidth = FitToReceiptWidth(imageWidth, imageHeight, ReceiptWidthInPixels()).Width;
-                }
-                else if (!string.IsNullOrEmpty(printObj.Text) && printObj.Font != null)
-                {
-                    itemWidth = (int)Math.Ceiling(probeGraphics.MeasureString(printObj.Text, printObj.Font).Width);
-                }
-
-                maxWidth = Math.Max(maxWidth, printObj.X + itemWidth);
-            }
-
-            return maxWidth;
         }
 
         /// <summary>Alto que ocupa el contenido de la tirilla, en píxeles del diseño.</summary>
@@ -334,7 +296,7 @@ namespace Domain.Peripherals
                 }
                 else if (printObj.Font != null)
                 {
-                    itemHeight = (int)Math.Ceiling(printObj.Font.GetHeight(ReceiptDesignDpiFloat / 72f));
+                    itemHeight = (int)Math.Ceiling(printObj.Font.GetHeight(ReceiptDesignDpiFloat));
                 }
 
                 maxHeight = Math.Max(maxHeight, printObj.Y + itemHeight);
@@ -396,7 +358,7 @@ namespace Domain.Peripherals
                 Directory.CreateDirectory(outputFolder);
                 var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
 
-                using var canvas = CreateReceiptCanvas(ReceiptCanvasWidthInPixels(), ReceiptContentHeightInPixels());
+                using var canvas = CreateReceiptCanvas(ReceiptWidthInPixels(), ReceiptContentHeightInPixels());
 
                 try
                 {
