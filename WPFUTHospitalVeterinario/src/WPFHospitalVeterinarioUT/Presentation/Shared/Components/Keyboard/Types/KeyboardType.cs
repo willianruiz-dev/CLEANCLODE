@@ -3,5 +3,7 @@
 enum KeyboardType
 {
     Alphabet,
-    Special
+    Special,
+    Numeric,
+    Email
 }

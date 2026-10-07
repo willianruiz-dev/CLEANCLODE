@@ -1,5 +1,24 @@
 # Handoff — Validaciones reactivas del formulario + teclados por campo
 
+> **Estado: implementado.** Este documento se conserva como especificación de referencia.
+> Los nombres definitivos en el código son:
+> `FormUC.UpdateContinueState()`, `FormUC.AdjustText(...)`, `FormUC.TxtFirstName_TextChanged`,
+> `FormUC.TxtLastName_TextChanged`, `FormUC.TxtMobile_TextChanged`, `FormUC.TxtEmail_changed`;
+> `VKeyboard.InputKind` con `KeyboardInputKind`, `KeyboardType.Numeric`, `KeyboardType.Email`
+> y las vistas `NumericView.xaml` / `EmailView.xaml`.
+> Los fragmentos de la sección 4 son la propuesta original; ante cualquier diferencia, manda el código.
+>
+> **Decisiones tomadas al implementar:**
+> - El celular **no** bloquea en vivo el primer dígito distinto de `3`: se filtra a solo dígitos (máx. 10)
+>   y el prefijo `3` se valida al enviar, para no alterar lo que el usuario ve mientras escribe.
+> - El botón Continuar se deshabilita con `IsEnabled = false` sobre el `Image` existente: bloquea mouse
+>   y táctil sin cambiar un solo píxel (no se puso `Opacity` ni estado "gris").
+> - El teclado de correo reemplaza la fila inferior del alfabético por `@`, `.`, `_`, `-`; el botón de
+>   símbolos (`?$#,`) alterna a la vista especial y `abc/123` regresa al teclado de origen.
+>
+> **Pendiente:** la validación en Windows de la sección 7. El entorno de revisión no tiene SDK `dotnet`
+> y WPF no compila fuera de Windows, así que el build y la prueba manual quedan para el equipo.
+
 Documento para el agente que ejecutará el cambio. Está redactado para pegarse tal cual como instrucción.
 
 ---

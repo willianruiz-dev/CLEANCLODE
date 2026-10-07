@@ -25,6 +25,9 @@ class VirtualKeyboardViewModel : INotifyPropertyChanged
             NotifyPropertyChanged(nameof(KeyboardType));
         }
     }
+
+    /// <summary>Teclado con el que se abrió el host, para poder regresar a él.</summary>
+    private readonly KeyboardType _initialKeyboardType;
     private bool _uppercase;
     public bool Uppercase
     {
@@ -65,11 +68,16 @@ class VirtualKeyboardViewModel : INotifyPropertyChanged
     public Command Cancel { get; }
     public Command ClearAll { get; }
 
-    public VirtualKeyboardViewModel(string initialValue)
+    public VirtualKeyboardViewModel(string initialValue) : this(initialValue, KeyboardType.Alphabet)
+    {
+    }
+
+    public VirtualKeyboardViewModel(string initialValue, KeyboardType keyboardType)
     {
         this.initialValue = initialValue;
         _keyboardText = initialValue;
-        _keyboardType = KeyboardType.Alphabet;
+        _keyboardType = keyboardType;
+        _initialKeyboardType = keyboardType;
         _uppercase = false;
         CaretPosition = _keyboardText.Length;
 
@@ -113,8 +121,9 @@ class VirtualKeyboardViewModel : INotifyPropertyChanged
         });
         ChangeKeyboardType = new Command(a =>
         {
-            if (KeyboardType == KeyboardType.Alphabet) KeyboardType = KeyboardType.Special;
-            else KeyboardType = KeyboardType.Alphabet;
+            // Vuelve al teclado con el que se abrió (alfabético o de correo), no siempre al alfabético.
+            if (KeyboardType == KeyboardType.Special) KeyboardType = _initialKeyboardType;
+            else KeyboardType = KeyboardType.Special;
         });
         Accept = new Command(a => VKeyboard.Close());
         Cancel = new Command(a => 

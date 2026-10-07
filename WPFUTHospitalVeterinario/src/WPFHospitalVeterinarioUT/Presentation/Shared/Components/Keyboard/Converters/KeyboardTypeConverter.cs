@@ -14,6 +14,8 @@ class KeyboardTypeConverter : IValueConverter
         {
             case KeyboardType.Alphabet: return new AlphabetView();
             case KeyboardType.Special: return new SpecialCharactersView();
+            case KeyboardType.Numeric: return new NumericView();
+            case KeyboardType.Email: return new EmailView();
         }
         return null;
     }

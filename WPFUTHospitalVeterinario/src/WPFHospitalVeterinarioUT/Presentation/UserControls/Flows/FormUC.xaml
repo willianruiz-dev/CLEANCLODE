@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:bases="clr-namespace:UI.Bases"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:keyboard="clr-namespace:VirtualKeyboard.Wpf"
     xmlns:local="clr-namespace:Presentation.UserControls.Flows"
     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -232,7 +233,8 @@
                                     FontSize="27"
                                     Foreground="{StaticResource TEXTCOLOR}"
                                     Text="{Binding Document, Mode=TwoWay}"
-                                    TextChanged="TxtDocument_TextChanged" />
+                                    TextChanged="TxtDocument_TextChanged"
+                                    keyboard:VKeyboard.InputKind="Numeric" />
                             </Border>
                         </StackPanel>
                     </StackPanel>
@@ -257,7 +259,8 @@
                             <TextBox
                                 CaretBrush="Transparent"
                                 Style="{StaticResource TextBoxStyle}"
-                                Text="{Binding FirstName, Mode=TwoWay}" />
+                                Text="{Binding FirstName, Mode=TwoWay}"
+                                TextChanged="TxtFirstName_TextChanged" />
                         </Border>
                     </StackPanel>
 
@@ -279,7 +282,8 @@
                             <TextBox
                                 CaretBrush="Transparent"
                                 Style="{StaticResource TextBoxStyle}"
-                                Text="{Binding LastName, Mode=TwoWay}" />
+                                Text="{Binding LastName, Mode=TwoWay}"
+                                TextChanged="TxtLastName_TextChanged" />
                         </Border>
                     </StackPanel>
 
@@ -301,7 +305,9 @@
                             <TextBox
                                 CaretBrush="Transparent"
                                 Style="{StaticResource TextBoxStyle}"
-                                Text="{Binding Mobile, Mode=TwoWay}" />
+                                Text="{Binding Mobile, Mode=TwoWay}"
+                                TextChanged="TxtMobile_TextChanged"
+                                keyboard:VKeyboard.InputKind="Numeric" />
                         </Border>
                     </StackPanel>
                     <StackPanel
@@ -323,7 +329,8 @@
                                 CaretBrush="Transparent"
                                 Style="{StaticResource TextBoxStyle}"
                                 Text="{Binding Email, Mode=TwoWay}"
-                                TextChanged="TxtEmail_changed" />
+                                TextChanged="TxtEmail_changed"
+                                keyboard:VKeyboard.InputKind="Email" />
                         </Border>
                     </StackPanel>
                 </StackPanel>

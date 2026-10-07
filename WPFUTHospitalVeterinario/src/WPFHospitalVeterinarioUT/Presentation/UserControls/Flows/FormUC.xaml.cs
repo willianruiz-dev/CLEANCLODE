@@ -5,6 +5,7 @@ using Domain.Validation;
 using ApiService.Models;
 using WPFHospitalVeterinarioUT.ApiService;
 using Presentation.UserControls.Bases;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -20,13 +21,22 @@ namespace Presentation.UserControls.Flows
     /// </summary>
     public partial class FormUC : AppUserControl
     {
-        
+        private const string STR_TIMER = "03:00";
+
+        /// <summary>Cantidad de dígitos de un celular en Colombia.</summary>
+        private const int MOBILE_DIGITS = 10;
+
         public Transaction _ts = Transaction.Instance;
         private readonly HospitalUserService _userService = new();
         private CancellationTokenSource? _documentLookupCancellation;
         private bool _isRegistered;
         private string typeDocument = string.Empty;
-        private const string STR_TIMER = "03:00";
+
+        /// <summary>Evita la reentrada cuando el texto del campo se normaliza en vivo.</summary>
+        private bool _isAdjustingText;
+
+        /// <summary>Indica si el usuario aceptó la política de tratamiento de datos.</summary>
+        private bool _policyAccepted;
 
         private TimerGeneric? _timer;
 
@@ -37,20 +47,139 @@ namespace Presentation.UserControls.Flows
             Transaction.Instance.transactionProcess.TipoTransaccion = TypeTransaction.Pago;
             Transaction.Instance.transactionProcess.TipoRecaudo = "Pago de factura";
             BtnForm.Visibility = Visibility.Hidden;
+            BtnForm.IsEnabled = false;
             this.Unloaded += OnUnloaded;
+
+            // Los datos autocompletados desde la API también deben actualizar el estado del botón.
+            _ts.customFlows.generaLInformationClient.PropertyChanged += OnPersonalInformationChanged;
+
+            UpdateContinueState();
 
             GoTimer();
 
         }
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
-           
+            _ts.customFlows.generaLInformationClient.PropertyChanged -= OnPersonalInformationChanged;
             _documentLookupCancellation?.Cancel();
             _documentLookupCancellation?.Dispose();
             StopTimer();
         }
 
-        
+        private void OnPersonalInformationChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            UpdateContinueState();
+        }
+
+        /// <summary>
+        /// Habilita el botón continuar únicamente cuando la información del formulario
+        /// es válida y el usuario aceptó la política de tratamiento de datos.
+        /// </summary>
+        private void UpdateContinueState()
+        {
+            var personalInfo = _ts.customFlows.generaLInformationClient;
+
+            bool isFormValid = PersonalInformationValidator.GetValidationError(
+                TypeDocument.SelectedItem != null,
+                personalInfo.Document,
+                personalInfo.FirstName,
+                personalInfo.LastName,
+                personalInfo.Mobile,
+                personalInfo.Email) == null;
+
+            BtnForm.IsEnabled = _policyAccepted && isFormValid;
+        }
+
+        #region Normalización en vivo de los campos
+
+        /// <summary>Documento: exclusivamente numérico.</summary>
+        private static string KeepDigits(string? value) =>
+            new string((value ?? string.Empty).Where(char.IsDigit).ToArray());
+
+        /// <summary>Campo numérico con una longitud máxima (celular: 10 dígitos).</summary>
+        private static string KeepDigitsMax(string? value, int maxLength)
+        {
+            var digits = KeepDigits(value);
+            return digits.Length > maxLength ? digits[..maxLength] : digits;
+        }
+
+        /// <summary>Nombres y apellidos: sin números.</summary>
+        private static string KeepNameCharacters(string? value) =>
+            new string((value ?? string.Empty)
+                .Where(c => char.IsLetter(c) || char.IsWhiteSpace(c) || c == '\'' || c == '-' || c == '.')
+                .ToArray());
+
+        /// <summary>Correo: sin espacios.</summary>
+        private static string KeepEmailCharacters(string? value) =>
+            new string((value ?? string.Empty).Where(c => !char.IsWhiteSpace(c)).ToArray());
+
+        /// <summary>
+        /// Aplica el filtro del campo sobre el texto actual y devuelve el valor limpio.
+        /// No vuelve a entrar al manejador de TextChanged que la invoca.
+        /// </summary>
+        private string AdjustText(TextBox textBox, Func<string?, string> sanitize)
+        {
+            var current = textBox.Text ?? string.Empty;
+            var sanitized = sanitize(current);
+
+            if (!string.Equals(current, sanitized, StringComparison.Ordinal))
+            {
+                _isAdjustingText = true;
+                try
+                {
+                    textBox.Text = sanitized;
+                }
+                finally
+                {
+                    _isAdjustingText = false;
+                }
+            }
+
+            return sanitized;
+        }
+
+        private void TxtFirstName_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (sender is not TextBox textBox || _isAdjustingText)
+                return;
+
+            var names = AdjustText(textBox, KeepNameCharacters);
+            _ts.customFlows.generaLInformationClient.FirstName = names;
+            UpdateContinueState();
+        }
+
+        private void TxtLastName_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (sender is not TextBox textBox || _isAdjustingText)
+                return;
+
+            var lastNames = AdjustText(textBox, KeepNameCharacters);
+            _ts.customFlows.generaLInformationClient.LastName = lastNames;
+            UpdateContinueState();
+        }
+
+        private void TxtMobile_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (sender is not TextBox textBox || _isAdjustingText)
+                return;
+
+            var mobile = AdjustText(textBox, value => KeepDigitsMax(value, MOBILE_DIGITS));
+            _ts.customFlows.generaLInformationClient.Mobile = mobile;
+            UpdateContinueState();
+        }
+
+        private void TxtEmail_changed(object sender, TextChangedEventArgs e)
+        {
+            if (sender is not TextBox textBox || _isAdjustingText)
+                return;
+
+            var email = AdjustText(textBox, KeepEmailCharacters);
+            _ts.customFlows.generaLInformationClient.Email = email;
+            UpdateContinueState();
+        }
+
+        #endregion
+
         private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             ComboBox comboBox = sender as ComboBox;
@@ -60,14 +189,19 @@ namespace Presentation.UserControls.Flows
                 typeDocument = selectedItem.Content.ToString();
                 _ts.customFlows.generaLInformationClient.DocumentType = typeDocument ?? string.Empty;
             }
+
+            UpdateContinueState();
         }
 
         private async void TxtDocument_TextChanged(object sender, TextChangedEventArgs e)
         {
-            if (sender is not TextBox textBox)
+            if (sender is not TextBox textBox || _isAdjustingText)
                 return;
 
-            var document = new string(textBox.Text.Where(char.IsDigit).ToArray());
+            // El documento solo admite dígitos: se descarta cualquier otro carácter.
+            var document = AdjustText(textBox, KeepDigits);
+            _ts.customFlows.generaLInformationClient.Document = document;
+
             _isRegistered = false;
 
             _documentLookupCancellation?.Cancel();
@@ -77,7 +211,10 @@ namespace Presentation.UserControls.Flows
 
             // Evita consultar la API por cada tecla y descarta respuestas de documentos anteriores.
             if (document.Length < 6)
+            {
+                UpdateContinueState();
                 return;
+            }
 
             try
             {
@@ -109,6 +246,8 @@ namespace Presentation.UserControls.Flows
             {
                 if (!cancellationToken.IsCancellationRequested)
                     Cursor = Cursors.Arrow;
+
+                UpdateContinueState();
             }
         }
 
@@ -138,6 +277,14 @@ namespace Presentation.UserControls.Flows
         private async void BtnForm_MouseDown(object sender, MouseButtonEventArgs e)
         {
             var personalInfo = _ts.customFlows.generaLInformationClient;
+
+            // Se descartan los espacios sobrantes antes de validar y almacenar.
+            personalInfo.Document = (personalInfo.Document ?? string.Empty).Trim();
+            personalInfo.FirstName = (personalInfo.FirstName ?? string.Empty).Trim();
+            personalInfo.LastName = (personalInfo.LastName ?? string.Empty).Trim();
+            personalInfo.Mobile = (personalInfo.Mobile ?? string.Empty).Trim();
+            personalInfo.Email = (personalInfo.Email ?? string.Empty).Trim();
+
             var validationError = PersonalInformationValidator.GetValidationError(
                 TypeDocument.SelectedItem != null,
                 personalInfo.Document,
@@ -246,20 +393,17 @@ namespace Presentation.UserControls.Flows
 
             if (toggleButton != null)
             {
-                bool isChecked = toggleButton.IsChecked ?? false;
-                if (isChecked) 
-                    { BtnForm.Visibility = Visibility.Visible; } 
+                _policyAccepted = toggleButton.IsChecked ?? false;
+
+                if (_policyAccepted)
+                    { BtnForm.Visibility = Visibility.Visible; }
                 else
                 {
                     BtnForm.Visibility = Visibility.Hidden;
                 }
-               
-            }
-        }
 
-        private void TxtEmail_changed(object sender, TextChangedEventArgs e)
-        {
-            // El valor se actualiza mediante binding.
+                UpdateContinueState();
+            }
         }
     }
 }
