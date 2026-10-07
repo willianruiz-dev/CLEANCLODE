@@ -62,6 +62,9 @@ namespace UI
                 }
             }
 #if !DISPENSER_CONTROLLED_BY_ARDUINO
+            // En la arquitectura actual el PC controla el CDMS directamente por dispenserPort.
+            // Esta validación no debe ejecutarse cuando el dispensador está cableado al Arduino,
+            // porque en ese modo ArduinoController realiza la inicialización y controla la entrega.
             // Verify dispenser load
             var dispenserOk = false;
             int dispenserRetries = 0;
