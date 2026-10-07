@@ -31,6 +31,7 @@ namespace Domain.UIServices
         private Transaction() { }
         public int IdPaypad { get; set; }
         public int IdTransaccionApi { get; set; }
+        public int IdTransaccionUt { get; set; }
         public TransactionProcess transactionProcess { get; set; } = new();
         public PaymentProcess paymentProcess { get; set; } = new();
         public CustomFlowHelpers customFlows { get; set; } = new();

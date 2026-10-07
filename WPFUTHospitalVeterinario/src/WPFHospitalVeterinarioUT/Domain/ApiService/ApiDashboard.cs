@@ -17,6 +17,7 @@ namespace WPFHospitalVeterinarioUT.ApiService
         private static HttpClient _client;
         private static string? _token;
         private static RequestQueue _requestsQueue;
+        private static readonly HospitalTransactionService _hospitalTransactions = new();
 
         static ApiDashboard()
         {
@@ -158,6 +159,15 @@ namespace WPFHospitalVeterinarioUT.ApiService
                     var transactionCreated = requestresponse.response;
                     ts.transactionProcess.ApiDto = transactionCreated;
                     ts.IdTransaccionApi = transactionCreated.Id;
+
+                    var hospitalTransaction = await _hospitalTransactions.CreateAsync(
+                        ToHospitalTransaction(transactionCreated));
+                    if (hospitalTransaction != null)
+                        ts.IdTransaccionUt = hospitalTransaction.TransactionId;
+                    else
+                        EventLogger.SaveLog(EventType.Error,
+                            "La transacción se creó en Dashboard pero no pudo sincronizarse con UT.");
+
                     EventLogger.SaveLog(EventType.Info, "Respuesta: Creación de transacción Dashboard", requestresponse);
                     return requestresponse.response;
                 }
@@ -209,6 +219,18 @@ namespace WPFHospitalVeterinarioUT.ApiService
                 {
                     var transactionUpdated = requestresponse.response;
                     ts.transactionProcess.ApiDto = transactionUpdated;
+
+                    if (ts.IdTransaccionUt > 0)
+                    {
+                        var hospitalTransaction = ToHospitalTransaction(transactionUpdated);
+                        hospitalTransaction.TransactionId = ts.IdTransaccionUt;
+                        if (!await _hospitalTransactions.UpdateAsync(hospitalTransaction))
+                        {
+                            EventLogger.SaveLog(EventType.Error,
+                                "La transacción se actualizó en Dashboard pero no pudo actualizarse en UT.");
+                        }
+                    }
+
                     EventLogger.SaveLog(EventType.Info, "Respuesta: Actualización de transacción Dashboard", requestresponse);
                     return requestresponse.response;
                 }
@@ -257,7 +279,28 @@ namespace WPFHospitalVeterinarioUT.ApiService
 
                 if (requestresponse.statusCode == 200)
                 {
-                    var listTransactionsCreated = requestresponse.response;
+                    var listTransactionsCreated = requestresponse.response ?? new List<TransactionDetailDto>();
+                    foreach (var createdDetail in listTransactionsCreated)
+                    {
+                        var hospitalDetail = new HospitalTransactionDetailDto
+                        {
+                            IdApi = createdDetail.Id.ToString(),
+                            IdTransaction = Transaction.Instance.IdTransaccionUt,
+                            IdCurrencyDenomination = createdDetail.IdCurrencyDenomination,
+                            CurrencyDenomination = createdDetail.CurrencyDenomination.ToString(),
+                            IdTypeOperation = createdDetail.IdTypeOperation,
+                            TypeOperation = createdDetail.TypeOperation,
+                            DateCreated = createdDetail.DateCreated,
+                            DateUpdated = createdDetail.DateUpdated
+                        };
+
+                        if (await _hospitalTransactions.CreateDetailAsync(hospitalDetail) == null)
+                        {
+                            EventLogger.SaveLog(EventType.Error,
+                                $"El detalle Dashboard {createdDetail.Id} no pudo sincronizarse con UT.");
+                        }
+                    }
+
                     EventLogger.SaveLog(EventType.Info, "Respuesta: Creación de detalle de transacción Dashboard", requestresponse);
                     return listTransactionsCreated;
                 }
@@ -312,6 +355,26 @@ namespace WPFHospitalVeterinarioUT.ApiService
                 return null;
             });
 
+        }
+
+        private static HospitalTransactionDto ToHospitalTransaction(TransactionDto source)
+        {
+            return new HospitalTransactionDto
+            {
+                IdApi = source.Id.ToString(),
+                Document = source.Document,
+                Reference = source.Reference,
+                Product = source.Product,
+                TotalAmount = source.TotalAmount,
+                RealAmount = source.RealAmount,
+                IncomeAmount = source.IncomeAmount,
+                ReturnAmount = source.ReturnAmount,
+                Description = source.Description,
+                IdStateTransaction = source.IdStateTransaction,
+                StateTransaction = source.StateTransaction,
+                DateCreated = source.DateCreated,
+                DateUpdated = source.DateUpdated
+            };
         }
 
     }
