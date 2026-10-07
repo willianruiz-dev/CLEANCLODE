@@ -1,29 +1,16 @@
+using Domain;
+using Domain.Enumerables;
+using Domain.Peripherals.Recorder;
+using Domain.UIServices;
+using Domain.Variables;
 using Presentation.UserControls.Bases;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using Domain.UIServices;
 using UI.Bases;
-using Domain;
-using System.ComponentModel;
 using UI.Modals;
-using VirtualKeyboard.Wpf;
-using Domain.Enumerables;
-using Domain.Variables;
 using WPFHospitalVeterinarioUT.ApiService;
-using Domain.Peripherals;
-using Domain.Peripherals.Recorder;
 
 namespace Presentation.UserControls.Flows
 {
@@ -34,19 +21,13 @@ namespace Presentation.UserControls.Flows
     {
         private const string STR_TIMER = "02:30";
         private Transaction _ts;
-        private ManualInputViewModel _viewModel;
-        private ModalWindow? _currentLoadModal = null;
-        private Border? _borderSelected = null;
         private TimerGeneric? _timer;
         public ReferenceToPayUC()
         {
             InitializeComponent();
             _ts = Transaction.Instance;
-            _viewModel = new ManualInputViewModel();
-            this.DataContext = _viewModel;
             Keyboard.KeyboardPressed += OnKeyboardPressed;
 
-            _ts = Transaction.Instance;
             nameUser.Text = "Hola, " + CapitaliceWord(FindShortWord(_ts.customFlows.generaLInformationClient.FirstName));
             this.Unloaded += OnUnloaded;
             InputInvoice.Text = FormatMoney("0");
@@ -58,6 +39,7 @@ namespace Presentation.UserControls.Flows
         {
 
 
+            Keyboard.KeyboardPressed -= OnKeyboardPressed;
             StopTimer();
         }
 
@@ -122,6 +104,15 @@ namespace Presentation.UserControls.Flows
             await Task.Delay(100);
         }
 
+
+        private static string FormatMoney(string? value)
+        {
+            var digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());
+            if (!long.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var amount))
+                amount = 0;
+
+            return "$" + amount.ToString("N0", CultureInfo.GetCultureInfo("es-CO"));
+        }
 
         private bool _isUpdatingText = false;
 
@@ -262,44 +253,5 @@ namespace Presentation.UserControls.Flows
         }
         #endregion
 
-    }
-    public class ManualInputViewModel : INotifyPropertyChanged
-    {
-        private string _statusMsg = string.Empty;
-
-        public string StatusMsg
-        {
-            get
-            {
-                return _statusMsg;
-            }
-            set
-            {
-                _statusMsg = value;
-                OnPropertyRaised(nameof(StatusMsg));
-            }
-        }
-        private string _title = string.Empty;
-        public string HelpMessage
-        {
-            get
-            {
-                return _title;
-            }
-            set
-            {
-                _title = value;
-                OnPropertyRaised(nameof(HelpMessage));
-            }
-        }
-
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        private void OnPropertyRaised(string propertyname)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyname));
-
-        }
     }
 }
