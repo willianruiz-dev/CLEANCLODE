@@ -1,689 +1,507 @@
-# Hospital Veterinario UT - Sistema de Pagos y Recaudos
+# Hospital Veterinario UT — Sistema de pagos y recaudos (Pay+)
 
-## Introducción
+Aplicación de **kiosco** en WPF (.NET 6) para el pago de facturas y recaudos del Hospital Veterinario de la Universidad del Tolima. El usuario ingresa su documento, sus datos personales y el valor a pagar; la máquina **recibe dinero en efectivo, entrega la devuelta e imprime la tirilla**, y todo el proceso queda registrado en dos sistemas por API y **grabado en video**.
 
-El **Hospital Veterinario UT** es una aplicación WPF desarrollada en C# que funciona como un sistema de kiosco para pagos y recaudos universitarios. La aplicación integra múltiples periféricos (aceptador de billetes, dispensador, Arduino, impresora) y utiliza una arquitectura basada en API REST para la gestión de datos.
+> **Documentación vigente.** Reemplaza al README anterior, que describía componentes que ya no existen en el proyecto (base de datos local SQLite, .NET Framework 4.8, un único `HospitalApiService` y notificaciones de errores por correo con `EmailSender`). Reescrita el **2026-10-07** contra el código actual.
 
-## Arquitectura del Sistema
+---
+
+## Tabla de contenido
+
+1. [Qué hace la aplicación](#1-qué-hace-la-aplicación)
+2. [Requisitos y compilación](#2-requisitos-y-compilación)
+3. [Arquitectura y estructura del proyecto](#3-arquitectura-y-estructura-del-proyecto)
+4. [Flujos](#4-flujos)
+   - 4.1 [Arranque y habilitación del kiosco](#41-arranque-y-habilitación-del-kiosco)
+   - 4.2 [Flujo completo de una transacción](#42-flujo-completo-de-una-transacción)
+   - 4.3 [Formulario: validaciones, consulta y guardado del usuario](#43-formulario-validaciones-consulta-y-guardado-del-usuario)
+   - 4.4 [Referencia y valor a pagar](#44-referencia-y-valor-a-pagar)
+   - 4.5 [Pago en efectivo: aceptación, devuelta y cancelación](#45-pago-en-efectivo-aceptación-devuelta-y-cancelación)
+   - 4.6 [Cierre: impresión, calificación y fin](#46-cierre-impresión-calificación-y-fin)
+   - 4.7 [Temporizadores](#47-temporizadores)
+   - 4.8 [Grabación de video](#48-grabación-de-video)
+5. [Pantallas y navegación](#5-pantallas-y-navegación)
+6. [Integraciones (API)](#6-integraciones-api)
+7. [Periféricos](#7-periféricos)
+8. [Estados y tipos de transacción](#8-estados-y-tipos-de-transacción)
+9. [Logs](#9-logs)
+10. [Configuración (App.config)](#10-configuración-appconfig)
+11. [Pruebas recomendadas](#11-pruebas-recomendadas)
+12. [Notas de diseño y mantenimiento](#12-notas-de-diseño-y-mantenimiento)
+13. [Documentos relacionados](#13-documentos-relacionados)
+
+---
+
+## 1. Qué hace la aplicación
+
+- **Cobra en efectivo**: acepta billetes, acumula el valor, calcula el redondeo a la centena y **devuelve la diferencia** (billetes por el dispensador CDMS y monedas por el Arduino).
+- **Registra al usuario**: si el documento no existe en la base de la universidad, pide los datos personales y los guarda por API; si ya existe, **autocompleta el formulario**.
+- **Registra la transacción en dos lugares**:
+  - **API Dashboard (E-City)**: panel administrativo del hospital. Ahí viven la transacción, sus detalles (aceptación, dispensado, rechazos) y la calificación.
+  - **API UT (Universidad del Tolima)**: base de datos de la universidad. Ahí queda el **usuario** (documento y datos personales) y la **transacción** sincronizada.
+- **Imprime la tirilla** (impresora W-80; en modo de desarrollo genera un PDF con las mismas medidas).
+- **Graba video de todo el proceso de pago** como evidencia del dinero recibido y devuelto.
+- **No utiliza base de datos local**: toda la persistencia es por API (véase `REVISION_TECNICA.md`).
+
+---
+
+## 2. Requisitos y compilación
+
+| Requisito | Detalle |
+|---|---|
+| Sistema | Windows 10/11 |
+| IDE | Visual Studio 2022 |
+| SDK | .NET 6 (`net6.0-windows`, WPF) |
+| Arquitectura | **x86 obligatorio** (`PlatformTarget = x86`): las DLLs de periféricos (`CDMS_CDU.dll`, `Msprintsdk.dll`, `MPOST.dll`) son de 32 bits |
+| DLLs nativas | `resources/MPOST6/MPOST.dll` (referenciada por el proyecto) y las SDK del dispensador/impresora |
+
+Dependencias NuGet: `MahApps.Metro`, `MaterialDesignThemes`, `Microsoft.Web.WebView2`, `Newtonsoft.Json`, `System.IO.Ports`, `OpenCvSharp4` (+ runtime Windows), `System.Drawing.Common`.
+
+### Compilación
+
+```powershell
+dotnet restore .\src\WPFHospitalVeterinarioUT.sln
+dotnet build .\src\WPFHospitalVeterinarioUT.sln -c Debug   -p:Platform=x86
+dotnet build .\src\WPFHospitalVeterinarioUT.sln -c Release -p:Platform=x86
+```
+
+### Las dos configuraciones
+
+| Configuración | Constante | Periféricos | Para qué sirve |
+|---|---|---|---|
+| `Debug` | `NO_PERIPHERALS` definida | **No se inicializan** | Desarrollo y pruebas en un PC sin hardware. En la pantalla de pago aparecen dos botones de prueba: *Add minor value* ($20.000) y *Add mid value* ($50.000). La tirilla se genera como PDF. |
+| `Release` | Sin constante | **Reales** | Producción: Arduino, aceptador, dispensador, impresora. Sin botones de prueba. |
+
+> `DISPENSER_CONTROLLED_BY_ARDUINO` se deja **intencionalmente sin definir**: en la arquitectura híbrida, los **billetes** los controla el CDMS por `dispenserPort` y el **Arduino/CH340 controla únicamente la devolución en monedas**.
+
+Las salidas quedan en `src/WPFHospitalVeterinarioUT/bin/<Configuración>/net6.0-windows/` (junto con las carpetas `Logs/`, `Videos/` y `Receipts/`).
+
+---
+
+## 3. Arquitectura y estructura del proyecto
 
 ```mermaid
 graph TB
-    subgraph "Cliente WPF"
-        A[MainWindow] --> B[Navigator]
-        B --> C[UserControls]
-        C --> D[Transaction Manager]
-        D --> E[HospitalApiService]
-        
-        subgraph "Periféricos"
-            F[ArduinoController]
-            G[BillAcceptor]
-            H[Dispenser]
-            I[VideoRecorder]
-            J[Printer]
-        end
-        
-        subgraph "Servicios"
-            K[EventLogger]
-            L[EmailSender]
-            M[API de información personal]
-            N[ApiDashboard]
-        end
+    subgraph UI["Presentation (WPF)"]
+        MW[MainWindow] --> NAV[Navigator - singleton]
+        NAV --> UC["UserControls<br/>Publicity · Config · Welcome · Form<br/>ReferenceToPay · Payment · Finish"]
+        UC --> BASE["AppUserControl (base)<br/>temporizador + navegación"]
     end
-    
-    subgraph "API Backend"
-        O[WSHospitalVeterinarioUT API]
-        P[HospitalContext]
-        Q[(SQL Server)]
+
+    subgraph DOM["Domain"]
+        TX["Transaction (singleton)<br/>estado de la transacción"]
+        TS["TimerService / TimerGeneric"]
+        REC["RecordingService → VideoRecorder"]
+        LOG["EventLogger"]
+        VAL["PersonalInformationValidator"]
+        APP["AppConfig"]
     end
-    
-    subgraph "Notificaciones"
-        R[SMTP Server]
-        S[Email Notifications]
+
+    subgraph API["Integraciones"]
+        DASH["ApiDashboard<br/>Login · Validate · Transaction<br/>Details · Rating"]
+        HU["HospitalUserService<br/>User"]
+        HT["HospitalTransactionService<br/>Transaction"]
     end
-    
-    E --> O
-    O --> P
-    P --> Q
-    K --> L
-    L --> R
-    R --> S
-    
-    D --> F
-    D --> G
-    D --> H
-    D --> I
-    D --> J
+
+    subgraph PER["Periféricos"]
+        ARD["ArduinoController<br/>+ MeiAcceptor (billetes/monedas)"]
+        DISP["Dispenser<br/>Hantle CDMS (billetes)"]
+        PRN["PrintService<br/>impresora W-80"]
+        CAM["Cámara (OpenCV)"]
+    end
+
+    UC --> TX
+    UC --> API
+    UC --> REC
+    REC --> CAM
+    TX --> DASH
+    API --> LOG
+    PER --> LOG
+    DASH -->|"HTTPS"| APIEXT1["apidashboardv2.e-city.co"]
+    HU -->|"HTTPS"| APIEXT2["apihospitalveterinariout.e-city.co"]
+    HT -->|"HTTPS"| APIEXT2
 ```
 
-## Flujo Principal de la Aplicación
+### Estructura de carpetas (solo lo relevante)
+
+```
+WPFUTHospitalVeterinario/
+├── README.md                        ← este documento
+├── IMPRESION_TIRILLA.md             ← detalle de la impresión (W-80 y PDF)
+├── ESPECIFICACION_VALIDACIONES_FORMULARIO.md
+├── REVISION_TECNICA.md              ← revisión técnica (eliminación de SQLite, colas, logs)
+├── resources/FLUJO_UNIVERDIDAD_DEL_TOLIMA_v2.pdf
+└── src/WPFHospitalVeterinarioUT/
+    ├── App.xaml.cs                  ← instancia única, teclado virtual, error fatal
+    ├── MainWindow.xaml.cs           ← tamaño de kiosco; inicializa periféricos (solo Release)
+    ├── App.config                   ← TODA la configuración (puertos, APIs, credenciales)
+    ├── Domain/
+    │   ├── ApiService/
+    │   │   ├── ApiDashboard.cs               ← API del Dashboard E-City (transacciones)
+    │   │   ├── HospitalUserService.cs        ← API UT: usuarios (GET/POST User)
+    │   │   ├── HospitalTransactionService.cs ← API UT: transacciones (POST/PUT)
+    │   │   ├── Models/                       ← DTOs y respuestas
+    │   │   └── QueueModels/RequestQueue.cs   ← cola de escrituras (un consumidor, reintentos)
+    │   ├── Peripherals/
+    │   │   ├── ArduinoController.cs          ← Arduino/CH340: aceptación y monedas (+ MEI dentro)
+    │   │   ├── Acceptor/MeiAcceptor.cs       ← aceptador de billetes MEI
+    │   │   ├── Dispenser/{Dispenser,CDMS_Handler,CDMS_Api}.cs ← Hantle CDMS (billetes)
+    │   │   ├── Printer/PrintService.cs       ← tirilla W-80 / PDF
+    │   │   ├── Recorder/{RecordingService,VideoRecorder}.cs   ← video
+    │   │   └── Scanner/ScannerController.cs  ← (sin uso actual)
+    │   ├── Validation/PersonalInformationValidator.cs
+    │   ├── UIServices/
+    │   │   ├── Navigator.cs · Transaction.cs
+    │   │   ├── TimerService.cs · TimerGeneric.cs
+    │   │   └── ImageSlider.cs                ← (sin uso actual)
+    │   ├── Enumerables/            ← StateTransaction, TypePayment, TypeTransaction, TypeOperation
+    │   ├── EventLogger.cs          ← logs en 3 carpetas
+    │   └── AppConfig.cs · Variables/Messages.cs
+    └── Presentation/UserControls/
+        ├── Bases/  ← AppUserControl (base), ConfigUC, WelcomeUC, FinishUC, TreatmentPolicy
+        └── Flows/  ← FormUC, ReferenceToPayUC, PaymentUC (+ PaymentViewModel), PublicityUC
+```
+
+---
+
+## 4. Flujos
+
+### 4.1 Arranque y habilitación del kiosco
 
 ```mermaid
 flowchart TD
-    A[Inicio de Aplicación] --> B[Inicialización de Periféricos]
-    B --> C{¿Periféricos OK?}
-    C -->|No| D[Mostrar Error y Reintentar]
-    D --> B
-    C -->|Sí| E[Pantalla de Publicidad]
-    
-    E --> F[Usuario Toca Pantalla]
-    F --> G[Pantalla de Bienvenida]
-    G --> H[Selección de Servicio]
-    
-    H --> I[Formulario de Datos]
-    I --> J[Validación de Usuario]
-    J --> K{¿Usuario Existe?}
-    K -->|No| L[Crear Usuario via API]
-    K -->|Sí| M[Cargar Datos Existentes]
-    
-    L --> N[Consulta de Referencias]
-    M --> N
-    N --> O[Selección de Referencia a Pagar]
-    O --> P[Iniciar Grabación de Video]
-    P --> Q[Pantalla de Pago]
-    
-    Q --> R[Insertar Billetes]
-    R --> S{¿Pago Completo?}
-    S -->|No| T[Mostrar Faltante]
-    T --> R
-    S -->|Sí| U[Procesar Transacción]
-    
-    U --> V[Guardar en API]
-    V --> W[Imprimir Recibo]
-    W --> X[Dispensar Cambio]
-    X --> Y[Detener Grabación]
-    Y --> Z[Pantalla de Finalización]
-    Z --> AA[Timeout]
-    AA --> E
-    
-    style A fill:#e1f5fe
-    style E fill:#f3e5f5
-    style Q fill:#fff3e0
-    style Z fill:#e8f5e8
+    A["MainWindow<br/>(16:9, instancia única, teclado virtual)"] --> B["PublicityUC<br/>videos en bucle"]
+    B -->|"toque en pantalla"| C["ConfigUC — InitPayPad"]
+    C --> D["1. Login en el Dashboard"]
+    D --> E["2. Validate (saldo del Pay Pad)"]
+    E --> F["3. Periféricos:<br/>Arduino SendStart + prueba de aceptación"]
+    F --> G["WelcomeUC<br/>¡Bienvenido! → Continuar"]
+    D -->|"falla"| R["Modal + reintentar<br/>(vuelve a InitPayPad)"]
+    E -->|"falla"| R
+    F -->|"falla"| R
 ```
 
-## Flujo de Manejo de Errores y Notificaciones
+- **Instancia única**: al iniciar, `App.xaml.cs` mata cualquier otra instancia de la aplicación.
+- **Periféricos al abrir (solo Release)**: antes de navegar, `MainWindow` llama a `ArduinoController.Initialize(arduinoPort, dispenserDenominations)` y verifica la carga del dispensador con `Dispenser.GetLoadMessage()`. Si algo falla, muestra un modal con el número de intento y reintenta hasta que quede listo.
+- **`ConfigUC`** repite el ciclo completo de validación ante cualquier fallo (modal informativo y reintento). La validación de impresora (`PrintService.CheckPrintStatus()`) está **comentada**: hoy no bloquea el arranque.
+- En **Debug** (`NO_PERIPHERALS`), el paso 3 se omite por completo.
+
+### 4.2 Flujo completo de una transacción
 
 ```mermaid
 flowchart TD
-    A[Error Detectado] --> B[EventLogger.SaveLog]
-    B --> C{¿Tipo de Error?}
-    
-    C -->|Error/FatalError| D[Verificar Duplicados]
-    C -->|P_Acceptor| E{¿Contiene Palabras Clave?}
-    C -->|P_Dispenser| F{¿Error Crítico?}
-    C -->|Otros| G[Evaluar Criterios]
-    
-    E -->|Sí| D
-    E -->|No| H[Solo Log Local]
-    F -->|Sí| D
-    F -->|No| H
-    G -->|Cumple| D
-    G -->|No Cumple| H
-    
-    D --> I{¿Error Reciente?}
-    I -->|Sí| J[Omitir Notificación]
-    I -->|No| K[Preparar Email]
-    
-    K --> L[EmailSender.EnviarNotificacionErrorLog]
-    L --> M[Conectar SMTP]
-    M --> N{¿Conexión OK?}
-    N -->|Sí| O[Enviar Email]
-    N -->|No| P[Log Error Email]
-    
-    O --> Q[Email a wruiz@e-city.co]
-    O --> R[CC: Notificacionesudtolima@e-city.co]
-    Q --> S[Registrar Envío Exitoso]
-    R --> S
-    P --> T[Registrar Fallo]
-    
-    H --> U[Guardar en Log JSON]
-    J --> U
-    S --> U
-    T --> U
-    
-    style A fill:#ffebee
-    style D fill:#fff3e0
-    style O fill:#e8f5e8
-    style P fill:#ffebee
+    W["WelcomeUC<br/>Continuar"] --> FORM["FormUC<br/>datos personales"]
+    FORM -->|"validar + guardar si es nuevo"| REF["ReferenceToPayUC<br/>referencia + valor"]
+    REF -->|"inicia VIDEO · crea transacción"| PAY["PaymentUC<br/>acepta dinero"]
+    PAY -->|"falta dinero"| PAY
+    PAY -->|"completó el valor"| PROC["Procesar pago"]
+    PROC -->|"hay devuelta"| DISP["Dispensar devuelta<br/>(video sigue grabando)"]
+    PROC -->|"sin devuelta"| SAVE["SavePay"]
+    DISP --> SAVE
+    SAVE --> FIN["FinishUC<br/>tirilla + calificación"]
+    PAY -.->|"cancelar"| CAN["CancelPay<br/>devuelve lo ingresado y luego guarda"]
+    CAN --> SAVE
+    FIN -->|"salir / timeout"| PUB["PublicityUC"]
+    FIN -->|"atrás"| PAY
 ```
 
-## Arquitectura de Datos
+Secuencia de llamadas por API en una compra normal:
 
-```mermaid
-erDiagram
-```
+| Momento | Dashboard (E-City) | API UT (universidad) |
+|---|---|---|
+| Al continuar el formulario, solo si el documento es nuevo | — | `POST User` (guarda datos personales) |
+| Al pulsar *Continuar* en la pantalla de pago | `POST Transaction` (crea la transacción; devuelve su Id) | `POST Transaction` (sincroniza la transacción) |
+| Cada billete aceptado / devuelto / rechazado | `POST TransactionDetail` (AP / DP / Reject) | — |
+| Al terminar el pago | `PUT/POST Transaction` (actualiza estado, montos y descripción) | `PUT Transaction/{id}` (actualiza la sincronizada) |
+| Si el usuario califica | `POST TransactionRating` | — |
 
-## Componentes Principales
+### 4.3 Formulario: validaciones, consulta y guardado del usuario
 
-### 1. **MainWindow.xaml.cs**
-- Punto de entrada de la aplicación
-- Inicialización de periféricos (Arduino, Aceptador, Dispensador)
-- Configuración del Navigator para navegación entre pantallas
-- Manejo de combinaciones de teclas para pruebas (Ctrl+Alt+L)
+Pantalla `FormUC` (temporizador **03:00**). Campos: tipo de documento, número de documento, nombres, apellidos, celular y correo; más la casilla de **política de tratamiento de datos** (el enlace abre `TreatmentPolicy`, que muestra el PDF en un WebView2).
 
-### 2. **Transaction.cs (Singleton)**
-- Gestiona el estado global de la transacción
-- Contiene información del proceso de pago y usuario
-- Integra VideoRecorder para grabación de sesiones
-- Maneja la comunicación con servicios externos
+**Reglas de entrada** (una sola fuente: `PersonalInformationValidator`):
 
-### 3. **HospitalApiService.cs**
-- Cliente HTTP para comunicación con la API REST
-- Métodos para CRUD de usuarios y transacciones
-- Manejo de DTOs para transferencia de datos
-- Configuración SSL y timeouts
+| Campo | Regla | Mensaje si falla |
+|---|---|---|
+| Tipo de documento | Debe estar seleccionado | "Por favor, seleccione su tipo de documento." |
+| Documento | Solo números, máximo 15 | "Por favor, ingrese un número de documento válido (solo números)." |
+| Nombres / Apellidos | Letras (tildes y ñ), espacios, apóstrofo, guion y punto; máx. 60 | "…sin números ni símbolos." |
+| Celular | Exactamente 10 dígitos y empieza por 3 | "…celular válido: 10 dígitos y debe comenzar por 3." |
+| Correo | Forma `usuario@dominio.tld`, máx. 254 | "Por favor, ingrese un correo electrónico válido." |
 
-### 4. **EventLogger.cs**
-- Sistema de logging centralizado con categorización
-- Detección inteligente de errores críticos
-- Integración con sistema de notificaciones por email
-- Prevención de spam de notificaciones duplicadas
+Comportamiento:
 
-### 5. **EmailSender.cs**
-- Envío de notificaciones automáticas por SMTP
-- Configuración empresarial (mail.1cero1.com:465)
-- Formato de mensajes para usuarios y desarrolladores
-- Logs detallados de actividad de email
+1. **Sanitización en vivo**: el documento solo admite dígitos; el celular se corta a 10; nombres/apellidos/correo se limpian según su tipo.
+2. **Asteriscos por campo** que se pintan cuando el campo ya se tocó y no cumple; al intentar continuar con errores, se marcan todos y se muestra el modal con el primer error.
+3. **Consulta del documento**: al escribir el documento (a partir de **4 dígitos**) y tras una pausa de **400 ms**, se consulta `GET User/{documento}` en la API UT. Si existe → **autocompleta** nombre, apellidos, celular, correo y tipo de documento, y la persona queda marcada como registrada. Si no existe (o se borra el documento), se limpian **solo** los datos autocompletados.
+4. **Guardado al continuar**: si la persona no estaba registrada, se envía `POST User` con sus datos. Si falla, se muestra: *"No fue posible almacenar su información personal para futuras ocasiones. Sin embargo, podrá continuar con la transacción iniciada."* (el flujo continúa).
+5. **Verificación posterior** (segundo plano): 1,5 s después de un guardado exitoso, la aplicación **vuelve a consultar el documento** y deja constancia en `Log_integration`: *"Verificación: el documento X sí quedó registrado en la API UT. Datos devueltos: …"* o una advertencia si no aparece. Así se distingue "la API dijo OK" de "quedó realmente guardado".
+6. Botones: *Continuar* → `ReferenceToPayUC`; *Atrás* → `WelcomeUC`; *Salir* → `PublicityUC`; *Política* → `TreatmentPolicy`.
 
-## Configuración del Sistema
+### 4.4 Referencia y valor a pagar
 
-### App.config - Configuraciones Principales
+Pantalla `ReferenceToPayUC` (temporizador **02:30**):
 
-```xml
-<appSettings>
-    <!-- API Configuration -->
-    <add key="HospitalApiBaseUrl" value="https://localhost:7287/api/Hospital/" />
-    
-    <!-- Email Configuration -->
-    <add key="EmailSmtpServer" value="mail.1cero1.com" />
-    <add key="EmailSmtpPort" value="465" />
-    <add key="EmailUsername" value="wruiz@e-city.co" />
-    <add key="EmailPassword" value="Abcde1234*" />
-    <add key="EmailSenderName" value="Hospital Veterinario UT" />
-    <add key="EmailAdminAddress" value="wruiz@e-city.co" />
-    <add key="EmailCcAddress" value="Notificacionesudtolima@e-city.co" />
-    <add key="EmailEnableNotifications" value="true" />
-    
-    <!-- Peripheral Configuration -->
-    <add key="arduinoPort" value="COM3" />
-    <add key="dispenserDenominations" value="1000,2000,5000,10000,20000,50000" />
-</appSettings>
-```
+1. El usuario ingresa la **referencia** y el **valor a pagar** con el teclado numérico en pantalla (formato `$1.234.567`, máximo 11 caracteres).
+2. El valor se guarda sin redondear y **redondeado a la centena superior**: `Total = Math.Ceiling(valor / 100) * 100` (es el valor que se cobra).
+3. Al pulsar *Continuar*:
+   - se muestra el modal de carga,
+   - **se inicia la grabación de video** (antes de crear la transacción, para capturar todo el proceso),
+   - `ApiDashboard.CreateTransaction()` crea la transacción en el Dashboard (y esta sincroniza con la API UT),
+   - si todo va bien → `PaymentUC`. Si algo falla → modal de error, se reactiva la pantalla y **no** se avanza.
 
-## API Endpoints
+### 4.5 Pago en efectivo: aceptación, devuelta y cancelación
 
-### Base URL: `https://localhost:7287/api/Hospital/`
+Pantalla `PaymentUC` (**sin temporizador**: mientras haya dinero en juego la pantalla no debe redirigirse sola).
 
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/User/{document}` | Obtener usuario por documento |
-| POST | `/User` | Crear o actualizar usuario |
-| GET | `/User/Search?query={query}` | Buscar usuarios |
-| GET | `/Transaction/{id}` | Obtener transacción por ID |
-| POST | `/Transaction` | Crear nueva transacción |
-| PUT | `/Transaction/{id}` | Actualizar transacción |
-| GET | `/Transactions/{document}` | Obtener transacciones por documento |
-| POST | `/TransactionDetail` | Crear detalle de transacción |
-| GET | `/Test` | Verificar conectividad |
+**Aceptación**
+- Al cargar, se habilita la aceptación por el total a pagar.
+- Cada vez que entra dinero (`CashIn`):
+  - se registra y **siempre se contabiliza** (el hardware ya lo aceptó físicamente; si no se contara, el dinero quedaría atrapado),
+  - se envía el detalle `AP` (aceptación) al Dashboard,
+  - si el pago ya estaba cancelado, el dinero se contabiliza **pero no se procesa** (lo devolverá `CancelPay`),
+  - al alcanzar el total: se oculta *Cancelar*, se detiene la aceptación, aparece *"Estamos procesando el pago…"* y arranca el cierre.
+- **Debug**: los botones *Add minor value* ($20.000) y *Add mid value* ($50.000) simulan la entrada de dinero.
 
-## Flujo de Navegación entre Pantallas
+**Pago completado, con devuelta**
+1. Estado temporal `Aprobada`; se recalcula la devuelta (`ingresado − total`).
+2. Se dispensa la devuelta (billetes por CDMS/monedas por Arduino) enviando el detalle `DP` (dispensado) por cada denominación.
+3. Tras el dispensado físico se mantiene en pantalla **"Por favor recoja su dinero…" durante 8 segundos** y **la grabación sigue activa**: el video debe capturar la devolución completa.
+4. Si la devuelta fue exacta → se guarda. Si hubo **faltante** → modal con el valor faltante (5 s), `DevueltaCorrecta = false` y el estado pasa a `AprobadaErrorDevuelta`. Los rechazos del dispensador se envían como detalle `Reject`.
+
+**Cancelación (antes de completar el valor)**
+1. *Cancelar* pide confirmación.
+2. Se devuelve **todo lo ingresado** (y el video sigue grabando durante la devolución).
+3. Solo después de la devolución se detiene la grabación y se guarda con estado `Cancelada`. Si la devolución falló → `CanceladaErrorDevuelta`.
+
+**SavePay** (guardado final, común a todos los caminos)
+- Guarda de consistencia: si el estado era `Aprobada` pero se devolvió todo el dinero, se corrige a `Cancelada` (con una alerta en el log).
+- Detiene la grabación (con reintentos).
+- Fija montos (`TotalIngresado`, `TotalDevuelta`, faltante) y arma la **descripción** según el estado (por ejemplo: *"Transacción finalizada correctamente."*, *"Transacción Cancelada, No se realizó el pago."*, o el aviso de error en la devolución con el valor faltante).
+- Actualiza la transacción en el Dashboard y sincroniza la UT.
+- Navega a `FinishUC`.
+
+### 4.6 Cierre: impresión, calificación y fin
+
+Pantalla `FinishUC` (temporizador **01:30**, arranca **después** de imprimir):
+
+1. Detiene la grabación de video (por si quedó activa).
+2. **Solo si la transacción no fue cancelada**: imprime la tirilla (una vez y opcionalmente una **segunda impresión**, con confirmación). Si la impresión falla, se ofrece reintentar y se abre la ventana de reporte de fallo.
+3. **Calificación** de 1 a 5 estrellas (Muy insatisfecho → Muy satisfecho). Al elegir, se envía la calificación al Dashboard; si el usuario no califica, queda "Sin calificación".
+4. *Salir* → si hubo faltante en la devolución, se avisa por 20 s y se cierra; luego vuelve a `PublicityUC` (también al agotarse el temporizador).
+
+**Contenido de la tirilla** (impresa por `PrintService`): recaudo, fecha, hora; nombre, apellidos, número de documento, número de transacción, estado, referencia, pago sin redondear, pago redondeado, valor ingresado y valor devuelto; dirección y línea de atención. En **Debug** se genera como PDF en `Receipts/`. Detalles técnicos en `IMPRESION_TIRILLA.md`.
+
+### 4.7 Temporizadores
+
+Diseño actual: **el temporizador vive en la clase base `AppUserControl`** (servicio `TimerService`), así que cada pantalla solo declara su duración y a dónde volver; ya no hay código de temporizador repetido en cada control.
+
+| Pantalla | Duración | Se inicia | Al agotarse |
+|---|---|---|---|
+| `FormUC` | 03:00 | en el constructor | `PublicityUC` |
+| `ReferenceToPayUC` | 02:30 | en el constructor | `PublicityUC` |
+| `FinishUC` | 01:30 | tras imprimir | `PublicityUC` |
+| `PaymentUC` | — | — | (sin temporizador a propósito) |
+
+Además, la cuenta se detiene **siempre** al salir de la pantalla (`Unloaded`), aunque la vista olvide detenerla.
+
+### 4.8 Grabación de video
+
+- **Inicia** en `ReferenceToPayUC`, justo **antes** de crear la transacción.
+- **Termina** en `PaymentUC.SavePay()` (tras la devolución), y por seguridad también en `FinishUC` y al entrar a `WelcomeUC`. La condición de diseño es: *el dinero se devuelve con la grabación activa* (esperas de 8 s incluidas).
+- **Formato y ubicación**: `Videos\yyyy\MM\dd\HH\Video_HHmmss_fff.mp4` y, al cerrar la grabación, el archivo se **renombra al número de transacción** (`276296.mp4`) cuando la transacción alcanzó a tener Id (si no, conserva el nombre con la hora). La carpeta cuelga de donde se ejecuta la aplicación (`bin\Debug\...` / `bin\Release\...`).
+- **Velocidad real del video**: la cámara entrega unos ~5 fps reales, pero el archivo se declara a 30 fps; al terminar, la aplicación **mide la velocidad real** (`frames−1 ÷ tiempo`) y **reescribe el archivo** para que la duración coincida con el tiempo real. Si la desviación es menor al 5 %, no toca el archivo. Nunca se fuerza la cámara a 30 fps: en poca luz el video se oscurece y este video es la evidencia de la devolución.
+- La cámara se abre con **DirectShow** y, si falla, se reintenta con el backend por defecto. Todo queda en el log: `"Cámara 0 lista (backend DirectShow)…"`, `"Velocidad del video corregida: 30 fps declarados -> X fps reales…"`, `"Grabación finalizada. Frames… Velocidad… Duración… Archivo…"`.
+
+---
+
+## 5. Pantallas y navegación
 
 ```mermaid
 stateDiagram-v2
     [*] --> PublicityUC
-    PublicityUC --> WelcomeUC : Touch/Click
-    WelcomeUC --> FormUC : Seleccionar Servicio
-    FormUC --> ReferenceToPayUC : Datos Válidos
-    ReferenceToPayUC --> PaymentUC : Referencia Seleccionada
-    PaymentUC --> FinishUC : Pago Completado
-    PaymentUC --> WelcomeUC : Cancelar
-    FinishUC --> PublicityUC : Timeout
-    
-    state FormUC {
-        [*] --> ValidatingUser
-        ValidatingUser --> CreatingUser : Usuario No Existe
-        ValidatingUser --> LoadingData : Usuario Existe
-        CreatingUser --> [*]
-        LoadingData --> [*]
-    }
-    
-    state PaymentUC {
-        [*] --> WaitingBills
-        WaitingBills --> ProcessingPayment : Billetes Insertados
-        ProcessingPayment --> DispensingChange : Pago Completo
-        DispensingChange --> PrintingReceipt
-        PrintingReceipt --> [*]
-    }
+    PublicityUC --> ConfigUC : toque
+    ConfigUC --> WelcomeUC : login+validación OK
+    WelcomeUC --> FormUC : Continuar
+    FormUC --> ReferenceToPayUC : datos válidos
+    FormUC --> TreatmentPolicy : política
+    FormUC --> WelcomeUC : Atrás
+    FormUC --> PublicityUC : Salir / timeout
+    ReferenceToPayUC --> PaymentUC : transacción creada
+    ReferenceToPayUC --> FormUC : Atrás
+    ReferenceToPayUC --> PublicityUC : Salir / timeout
+    PaymentUC --> FinishUC : pago guardado (o cancelado)
+    FinishUC --> PaymentUC : Atrás
+    FinishUC --> PublicityUC : Salir / timeout
 ```
 
-## Integración de Periféricos
-
-### Arduino Controller
-- **Puerto**: Configurable via App.config (COM3 por defecto)
-- **Función**: Control de sensores y actuadores
-- **Reintentos**: Automático con mensajes informativos
-
-### Aceptador de Billetes
-- **Denominaciones Aceptadas**: 2000, 5000, 10000, 20000, 50000, 100000 COP
-- **NOTA**: No acepta billetes de 1000 (ya no existen en circulacion)
-- **NOTA**: No acepta monedas
-- **Validación**: Tiempo real con feedback visual
-- **Errores**: Notificación automática por email
-
-### Dispensador de Cambio
-- **Billetes**: 2000 y 10000 COP (2 baúles)
-- **Monedas**: 500 y 100 COP
-- **Control**: Independiente del Arduino (configurable)
-- **Verificación**: Sensores de carga antes de operación
-- **Mantenimiento**: Alertas automáticas de estado
-
-### Video Recorder
-- **Inicio**: Al ingresar datos del formulario
-- **Duración**: Durante todo el proceso de pago
-- **Formato**: Archivos con timestamp
-- **Almacenamiento**: Local con limpieza automática
-
-## Sistema de Logs
-
-### Estructura de Directorios
-```
-Logs/
-├── Log_application/     # Logs generales de la aplicación
-├── Log_peripherals/     # Logs de dispositivos periféricos
-├── Log_integration/     # Logs de integraciones externas
-└── email_log_YYYYMMDD.txt  # Logs específicos de email
-```
-
-### Tipos de Eventos
-- **FatalError**: Errores críticos que requieren intervención inmediata
-- **Error**: Errores que afectan funcionalidad pero permiten continuar
-- **Warning**: Advertencias que no afectan operación
-- **Info**: Información general de operación
-- **P_Acceptor**: Eventos específicos del aceptador de billetes
-- **P_Arduino**: Eventos del controlador Arduino
-- **P_Dispenser**: Eventos del dispensador de cambio
-
-## Instalación y Configuración
-
-### Prerrequisitos
-1. **.NET Framework 4.8** o superior
-2. **SQL Server** (192.168.20.24) con base de datos UNIVERSIDAD_TOLIMA
-3. **API Backend** ejecutándose en puerto 7287
-4. **Periféricos** conectados y configurados
-
-### Pasos de Instalación
-
-1. **Clonar el repositorio**
-```bash
-git clone [repository-url]
-cd WPFUTHospitalVeterinario
-```
-
-2. **Configurar App.config**
-   - Actualizar URLs de API
-   - Configurar credenciales de email
-   - Ajustar puertos de periféricos
-
-3. **Restaurar paquetes NuGet**
-```bash
-dotnet restore
-```
-
-4. **Compilar la solución**
-```bash
-dotnet build --configuration Release
-```
-
-5. **Ejecutar la aplicación**
-```bash
-dotnet run --project WPFHospitalVeterinarioUT
-```
-
-## Configuración de Periféricos
-
-### Arduino
-1. Conectar Arduino al puerto USB
-2. Verificar puerto COM en Administrador de Dispositivos
-3. Actualizar `arduinoPort` en App.config
-4. Cargar firmware específico del proyecto
-
-### Aceptador de Billetes
-1. Conectar via puerto serie o USB
-2. Configurar denominaciones aceptadas
-3. Calibrar sensores según manual del fabricante
-4. Probar con billetes de prueba
-
-### Dispensador
-1. Cargar billetes en casetes correspondientes
-2. Verificar sensores de nivel
-3. Ejecutar rutina de calibración
-4. Probar dispensado manual
-
-## Monitoreo y Mantenimiento
-
-### Logs de Sistema
-- **Ubicación**: `./Logs/`
-- **Rotación**: Diaria automática
-- **Retención**: 30 días (configurable)
-- **Formato**: JSON estructurado
-
-### Notificaciones por Email
-- **Destinatarios**: wruiz@e-city.co, Notificacionesudtolima@e-city.co
-- **Frecuencia**: Máximo 1 por error cada 5 minutos
-- **Contenido**: Mensaje para usuario + detalles técnicos
-
-### Mantenimiento Preventivo
-1. **Diario**: Verificar logs de errores
-2. **Semanal**: Limpiar periféricos y verificar conexiones
-3. **Mensual**: Actualizar denominaciones y verificar calibración
-4. **Trimestral**: Backup de configuraciones y actualización de software
-
-## Solución de Problemas Comunes
-
-### Error de Conexión a API
-```
-Síntoma: "No se pudo establecer conexión con la API"
-Solución: 
-1. Verificar que la API esté ejecutándose
-2. Comprobar URL en App.config
-3. Verificar conectividad de red
-4. Revisar certificados SSL
-```
-
-### Periféricos No Detectados
-```
-Síntoma: "Periféricos no conectados correctamente"
-Solución:
-1. Verificar conexiones físicas
-2. Comprobar puertos COM en App.config
-3. Reiniciar dispositivos
-4. Verificar drivers instalados
-```
-
-### Errores de Email
-```
-Síntoma: "Error al enviar notificación por correo"
-Solución:
-1. Verificar credenciales SMTP
-2. Comprobar configuración de firewall
-3. Validar servidor SMTP disponible
-4. Revisar logs de email detallados
-```
-
-## Desarrollo y Extensión
-
-### Estructura del Proyecto
-```
-WPFHospitalVeterinarioUT/
-├── Domain/                 # Lógica de negocio
-│   ├── ApiService/        # Modelos de API
-│   ├── Enumerables/       # Enumeraciones
-│   ├── Peripherals/       # Control de periféricos
-│   └── UIServices/        # Servicios de UI
-├── Presentation/          # Interfaz de usuario
-│   ├── UserControls/      # Controles personalizados
-│   └── Shared/           # Componentes compartidos
-├── Assets/               # Recursos multimedia
-└── Properties/           # Configuraciones del proyecto
-```
-
-### Patrones de Diseño Utilizados
-- **Singleton**: Transaction, Navigator
-- **Observer**: PropertyChanged en modelos
-- **Factory**: Creación de UserControls
-- **Repository**: Servicios de datos
-
-### Extensiones Recomendadas
-1. **Nuevos Métodos de Pago**: Tarjetas, QR, NFC
-2. **Reportes Avanzados**: Dashboard en tiempo real
-3. **Integración Móvil**: App complementaria
-4. **IA/ML**: Detección de fraudes, optimización de cambio
-
-## Contacto y Soporte
-
-**Desarrollador**: William Ruiz  
-**Email**: wruiz@e-city.co  
-**Organización**: E-City  
-**Proyecto**: Hospital Veterinario UT - Universidad del Tolima
+| Pantalla | Rol |
+|---|---|
+| `PublicityUC` | Vitrina en reposo (videos publicitarios en bucle). Es la pantalla a la que todo vuelve al terminar o al agotarse un temporizador. |
+| `ConfigUC` | Habilitación del kiosco: login, saldo y periféricos. Reintenta sola ante fallos. |
+| `WelcomeUC` | Bienvenida; limpia la transacción anterior (`Transaction.Reset()`) y detiene cualquier grabación que hubiera quedado. |
+| `FormUC` | Datos personales (validación, autocompletado, guardado). |
+| `TreatmentPolicy` | Política de tratamiento de datos (PDF en WebView2). |
+| `ReferenceToPayUC` | Referencia y valor a pagar (redondeo a la centena). |
+| `PaymentUC` | Aceptación de dinero, devuelta y cancelación. |
+| `FinishUC` | Tirilla, calificación y cierre. |
 
 ---
 
-*Documentación generada automáticamente - Última actualización: 2025-09-03*
+## 6. Integraciones (API)
+
+### 6.1 API del Dashboard (E-City)
+
+- Dirección base: `apiBaseAddress` (por defecto `https://apidashboardv2.e-city.co/`), cabecera `DashboardKeyId` y **login previo** con usuario/contraseña del Pay Pad (`username`, `pwd`). El token se renueva en `Login`.
+- Es el sistema donde el hospital **consulta y administra** las transacciones.
+- **Escrituras en cola**: la actualización de la transacción, los detalles y la calificación se envían por `RequestQueue` (cola con un solo consumidor y hasta 3 reintentos con espera creciente ante fallos transitorios de red), para no bloquear la interfaz ni perder datos. La **creación** de la transacción sí es directa porque su respuesta define el Id que usa todo el flujo.
+
+| Clave en `App.config` | Ruta | Cuándo se usa |
+|---|---|---|
+| `Login` | `Auth/LoginPayPad` | Al habilitar el kiosco |
+| `Validate` | `api/PayPad/Validate` | Al habilitar el kiosco (saldo/servicio) |
+| `Transaction` | `api/Transaction/Paypad` | Crear la transacción y actualizarla |
+| `TransactionDetails` | `api/Transaction/Paypad/Details` | Detalles por operación: `AP`=aceptación, `DP`=dispensado, `Reject`=rechazo |
+| `TransactionRating` | `api/Transaction/Rating` | Calificación de 1 a 5 |
+
+### 6.2 API UT (Universidad del Tolima)
+
+- Dirección base: `HospitalApiBaseUrl` (`https://apihospitalveterinariout.e-city.co/api/Hospital/`, Swagger en `/Swagger/index.html`).
+- Es la **base de datos de la universidad**: ahí deben quedar el usuario y la transacción.
+- Este es el **único** destino de los datos del formulario: el Dashboard no tiene nada que ver con el registro de la persona.
+
+| Método | Ruta | Cuándo | Notas |
+|---|---|---|---|
+| `GET` | `User/{documento}` | Al escribir el documento (≥4 dígitos, 400 ms después) y al verificar guardados | `404` → se registra en el log y se piden los datos en el formulario |
+| `POST` | `User` | Al continuar el formulario si la persona no existía | Crea/actualiza; se verifica con un segundo `GET` a los 1,5 s |
+| `POST` | `Transaction` | Al continuar en la pantalla de pago | Devuelve el Id de la UT, que se guarda como `IdTransaccionUt` |
+| `PUT` | `Transaction/{id}` | Al guardar el pago | Solo si la creación se sincronizó |
+
+Todas las llamadas quedan en `Log_integration`. Si la sincronización con la UT falla, **el cobro no se revierte** (la transacción ya quedó en el Dashboard) pero tampoco pasa en silencio: se registra el motivo en `Log_integration` y un `Error` en el log de aplicación avisando de que el pago no llegó a la base de la universidad. El guardado del usuario, además, se reconsulta para confirmar que sí quedó.
 
 ---
 
-## 🔒 Correcciones de Seguridad - Rama VULNERABILITY
+## 7. Periféricos
 
-### Resumen de Vulnerabilidades Encontradas y Corregidas
+| Periférico | Archivo | Puerto (`App.config`) | Función |
+|---|---|---|---|
+| **Arduino / CH340** | `ArduinoController.cs` | `arduinoPort` (COM4) | Recibe las órdenes `OR:*` y gobierna la aceptación y **la devolución en monedas**. Publica los eventos que usa la pantalla de pago: `CashIn`, `CashDispensed`, `DispenserReject`, `PeripheralError`. |
+| **Aceptador de billetes (MEI)** | `MeiAcceptor.cs` | `meiPort` (COM2) + `acceptorDevice` (MEI) | Acepta, retiene y valida los billetes. Lo abre y lo gestiona `ArduinoController` (`IsConnected`, `OpenAcceptor`, `EnableAcceptance`…). |
+| **Dispensador Hantle CDMS** | `Dispenser.cs` + `CDMS_Handler` / `CDMS_Api` | `dispenserPort` (COM1), baúles en `dispenserDenominations` (`10000;2000`) | Entrega los **billetes** de la devuelta. Expone `GetLoadMessage()` (estado de carga, se valida al arrancar), `DispenseAmount()`, contadores `DispensedData` / `RejectData` y la bandera `MustReinitialize` tras un error crítico. |
+| **Impresora W-80** | `PrintService.cs` | USB (`Msprintsdk.dll`, `SetUsbportauto`) | Imprime la tirilla. En Debug (sin periféricos) genera un PDF con las mismas medidas para poder probar. |
+| **Cámara** | `VideoRecorder.cs` | índice 0 (DirectShow) | Evidencia en video del proceso de pago. |
+| **Escáner** | `ScannerController.cs` | `scannerPort` | **Sin uso actual**: el código existe pero no está conectado al flujo (además lee la clave `ScannerPort` con otra capitalización que la del `App.config`). |
 
-**Fecha de Análisis**: 20 de abril, 2026  
-**Rama**: VULNERABILITY (creada desde PRODUCCION)  
-**Total Vulnerabilidades**: 18 (4 Críticas, 6 Altas, 5 Medias, 3 Bajas)
-
----
-
-### ✅ VULNERABILIDADES CRÍTICAS CORREGIDAS
-
-#### 1. Validación de Entrada en Dispensador
-**Archivo**: `Domain/Peripherals/Dispenser/Dispenser.cs`  
-**Problema**: No se validaban valores negativos ni cero en `DispenseAmount()`  
-**Impacto**: Comportamiento indefinido, posibles cálculos erróneos  
-**Solución**: 
-```csharp
-// Línea 115-133
-if (dispendAmount <= 0)
-{
-    EventLogger.SaveLog(EventType.Error, $"Intento de dispensacion con valor invalido: {dispendAmount}");
-    throw new ArgumentException("El valor a dispensar debe ser mayor a cero");
-}
-```
-
-#### 2. Verificación de MustReinitialize
-**Archivo**: `Domain/Peripherals/Dispenser/Dispenser.cs`  
-**Problema**: No se verificaba el estado del dispensador antes de operar  
-**Impacto**: Intentar dispensar con hardware en estado de error  
-**Solución**:
-```csharp
-// Línea 125-130
-if (MustReinitialize)
-{
-    EventLogger.SaveLog(EventType.Error, "Dispensador requiere reinicializacion antes de operar");
-    throw new InvalidOperationException("El dispensador requiere reinicializacion tras un error critico");
-}
-```
-
-#### 3. Limpieza de Variables en Cada Dispensación
-**Archivo**: `Domain/Peripherals/Dispenser/Dispenser.cs`  
-**Problema**: `CleanVariable()` solo se llamaba en `Start()`, no en cada dispensación  
-**Impacto**: Estado residual de transacciones anteriores afectaba nuevas operaciones  
-**Solución**:
-```csharp
-// Línea 132-133 - Se llama CleanVariable() al inicio de DispenseAmount()
-CleanVariable();
-```
-
-#### 4. Límite de Recursión en GoDispend
-**Archivo**: `Domain/Peripherals/Dispenser/Dispenser.cs`  
-**Problema**: Función recursiva sin límite de profundidad  
-**Impacto**: StackOverflowException si múltiples baúles están vacíos  
-**Solución**:
-```csharp
-// Línea 176, 179-186
-private static string GoDispend(int dispendValue, List<int>? cassetteToIgnore = null, int depth = 0)
-{
-    // Limite de recursión
-    if (depth > 4)
-    {
-        EventLogger.SaveLog(EventType.Error, $"Limite de recursion alcanzado (depth={depth}). Dispensacion abortada.");
-        CoinsValue = _valueToDispense - DispensedValue;
-        MustReinitialize = true;
-        return DISP_MAXREJECT;
-    }
-    // ...
-}
-```
-
-#### 5. Null-Conditional en Eventos del Aceptador
-**Archivo**: `Domain/Peripherals/Acceptor/MeiAcceptor.cs`  
-**Problema**: Eventos se invocaban sin verificar suscriptores (`BillAccepted.Invoke()`)  
-**Impacto**: NullReferenceException y crash de la aplicación  
-**Solución**:
-```csharp
-// Línea 342, 347, 376, 406, 425, 442, 458 - Cambiar .Invoke() a ?.Invoke()
-BillAccepted?.Invoke(Convert.ToDecimal(acep.Bill.Value));
-AcceptorError?.Invoke(ex);
-```
+> **Archivos delicados**: `ArduinoController.cs`, `Dispenser.cs`, `CDMS_*`, `MeiAcceptor.cs` y `PrintService.cs` no deben modificarse sin autorización explícita; son la capa que habla con el hardware real.
 
 ---
 
-### ✅ VULNERABILIDADES ALTAS CORREGIDAS
+## 8. Estados y tipos de transacción
 
-#### 6. Bug en Loop TryEject
-**Archivo**: `Domain/Peripherals/Dispenser/Dispenser.cs`  
-**Problema**: Loop ejecutaba 4 veces en lugar de 3 (`tries >= 0`)  
-**Solución**: Cambiado a `tries > 0` (Línea 392)
+**`StateTransaction`** (`Domain/Enumerables/StateTransaction.cs`):
 
-#### 7. Validación de Denominaciones de Billetes
-**Archivo**: `Domain/Peripherals/Acceptor/MeiAcceptor.cs`  
-**Problema**: No se validaba que el billete tuviera una denominación permitida  
-**Impacto**: Aceptación de billetes con valores inesperados  
-**Solución**:
-```csharp
-// Línea 337-352
-int[] allowedDenominations = { 1000, 2000, 5000, 10000, 20000, 50000 };
-bool isValidDenomination = false;
-foreach (var denom in allowedDenominations)
-{
-    if (acep.Bill.Value == denom)
-    {
-        isValidDenomination = true;
-        break;
-    }
-}
+| Valor | Nombre | Significado |
+|---|---|---|
+| 1 | `Iniciada` | Creada; aún no hay pago |
+| 2 | `Aprobada` | Pagada correctamente y con devuelta exacta |
+| 3 | `Cancelada` | Cancelada por el usuario; el dinero se devolvió completo |
+| 4 | `AprobadaErrorDevuelta` | Pagada, pero la devuelta quedó incompleta (faltante) |
+| 5 | `CanceladaErrorDevuelta` | Cancelada, pero la devolución quedó incompleta |
+| 6 | `AprobadaSinNotificar` | Aprobada sin poder notificar a la entidad |
+| 7 | `ErrorServicioTercero` | Error de un servicio externo |
 
-if (!isValidDenomination)
-{
-    EventLogger.SaveLog(EventType.Error, $"Aceptador: Billete de denominacion invalida o desconocida: {acep.Bill.Value}");
-    return;
-}
-```
+Los estados 4 y 5 no se escriben a mano: son el estado base `+2` cuando `DevueltaCorrecta` es falso.
 
-#### 8. Implementación de MeiBillEscrow
-**Archivo**: `Domain/Peripherals/Acceptor/MeiAcceptor.cs`  
-**Problema**: Evento vacío sin implementación  
-**Impacto**: Sin logging de billetes en escrow (importante para auditoría)  
-**Solución**: Implementado logging con try-catch (Línea 369-383)
+**Otros enums**: `TypeOperation` (`AP`=2 aceptación, `DP`=1 dispensado, `Reject`=3), `TypePayment` (`Efectivo`=1, `TarjetaCredito`), `TypeTransaction` (`Consulta`, `Pago`, `Retiro`, `Consignacion`, `Reconsignacion`, `EstudioCredito`, `Registro`).
 
 ---
 
-### 📊 Resultados de Pruebas Automatizadas
+## 9. Logs
 
-Script de pruebas: `Tests/Run-SecurityTests.ps1`
+`EventLogger` escribe un archivo JSON por día (`Log{yyyy-MM-dd}.json`) en **tres carpetas** dentro de `Logs/`, junto al ejecutable:
 
-```
-========================================
-SECURITY TESTS - PERIPHERALS
-========================================
+| Carpeta | Contenido | Cuándo mirarla |
+|---|---|---|
+| `Logs/Log_application` | Pantallas, pago, video, Dashboard, temporizadores | "El video salió corto", "no imprimió", "se quedó una pantalla" |
+| `Logs/Log_integration` | API UT (usuarios y transacciones) y las respuestas del Dashboard | "No guardó el registro", "no quedó en la base de la universidad" |
+| `Logs/Log_peripherals` | Eventos `P_*`: Arduino, aceptador, dispensador | "No aceptó el billete", "no devolvió", "puerto ocupado" |
 
---- DISPENSER TESTS ---
-[CRITICAL] Negative value validation - PASSED
-[HIGH] Zero value validation - PASSED
-[CRITICAL] Max value overflow check - PASSED
-[CRITICAL] Static variables race condition - PASSED
-[CRITICAL] Unlimited recursion risk - PASSED
-[HIGH] CleanVariable not called each time - PASSED
-[HIGH] MustReinitialize not blocking - PASSED
-[HIGH] CoinsValue can be negative - PASSED
-[HIGH] TryEject runs 4 times not 3 - PASSED
-[MEDIUM] Denominations not validated - PASSED
+Reglas de clasificación: los eventos `P_*` van a periféricos; la clase `Hospital*` o el tipo `Integration` van a integración; el resto a aplicación. La escritura está **serializada con un lock**, de modo que varias partes de la aplicación pueden registrar a la vez sin corromper los archivos.
 
---- ACCEPTOR TESTS ---
-[CRITICAL] Events without null check - PASSED
-[CRITICAL] AcceptorError no null check - PASSED
-[HIGH] No bill validation - PASSED
-[HIGH] Handlers without try-catch - PASSED
-[MEDIUM] No connection heartbeat - PASSED
-[HIGH] StackerFull not blocking - PASSED
-[MEDIUM] No state persistence - PASSED
-[LOW] MeiBillEscrow empty - PASSED
+Líneas clave para diagnosticar:
 
-========================================
-RESULTS SUMMARY
-========================================
-Total tests:    18
-Passed:         18
-Failed:         0
-Success rate:     100%
-```
+- `"Información personal almacenada mediante la API."` → se envió la persona a la UT.
+- `"Verificación: el documento X sí quedó registrado…"` → la UT confirmó el guardado (con los datos devueltos).
+- `"Sincronización UT completada: POST/PUT…"` → la transacción quedó en la base de la universidad.
+- `"Velocidad del video corregida: 30 fps declarados -> X fps reales…"` y `"Grabación finalizada. Frames… Duración… Archivo…"` → estado real del video.
 
 ---
 
-### 📁 Archivos de Documentación de Seguridad
+## 10. Configuración (App.config)
 
-1. **Tests/VULNERABILITY_REPORT.md** - Reporte detallado con todas las vulnerabilidades y soluciones
-2. **Tests/Run-SecurityTests.ps1** - Script de pruebas automatizadas
-3. **Tests/DispenserSecurityTests.cs** - Pruebas unitarias del dispensador
-4. **Tests/AcceptorSecurityTests.cs** - Pruebas unitarias del aceptador
-
----
-
-### 🧪 Pruebas Recomendadas Antes de Merge a PRODUCCION
-
-#### Pruebas de Dispensador:
-- [ ] Intentar dispensar valor negativo → Debe lanzar excepción
-- [ ] Intentar dispensar cero → Debe lanzar excepción
-- [ ] Verificar que CleanVariable se llama cada vez
-- [ ] Probar dispensación con baúl vacío → Debe detenerse después de 4 reintentos
-- [ ] Verificar que MustReinitialize bloquea operaciones
-- [ ] Verificar que CoinsValue nunca es negativo
-
-#### Pruebas de Aceptador:
-- [ ] Insertar billete normal → Debe aceptar y loguear
-- [ ] Verificar que no crashea si no hay suscriptores a eventos
-- [ ] Insertar billete con valor raro → Debe rechazar y loguear error
-- [ ] Verificar logging en escrow
-- [ ] Verificar que se validan denominaciones
-
-#### Pruebas de Estrés:
-- [ ] Múltiples dispensaciones consecutivas
-- [ ] Inserción rápida de billetes
-- [ ] Verificar concurrencia (si aplica)
+| Clave | Valor por defecto | Para qué |
+|---|---|---|
+| `HospitalApiBaseUrl` | `https://apihospitalveterinariout.e-city.co/api/Hospital/` | API UT (usuarios y transacciones) |
+| `apiBaseAddress` | `https://apidashboardv2.e-city.co/` | API del Dashboard E-City |
+| `apiKeyId`, `username`, `pwd`, `PaypadId` | credenciales del Pay Pad | Identificación del kiosco (no se documentan los valores aquí) |
+| `Login`, `Validate`, `Transaction`, `TransactionDetails`, `TransactionRating` | rutas del Dashboard | Endpoints usados por `ApiDashboard` |
+| `arduinoPort` / `meiPort` / `dispenserPort` | `COM4` / `COM2` / `COM1` | Puertos de cada periférico |
+| `acceptorDevice` | `MEI` | Aceptador en uso |
+| `dispenserDenominations` | `10000;2000` | Baúles del dispensador CDMS |
+| `imgVoucher` | `Assets/Images/Voucher.png` | Imagen que acompaña la tirilla |
+| `scannerPort`, `publishDir`, `Tonnage` | — | **Sin uso actual** (el escáner y el slider de imágenes no están conectados al flujo) |
 
 ---
 
-### 📝 Notas Importantes
+## 11. Pruebas recomendadas
 
-1. **ESTADO ACTUAL**: Cambios sin commit en rama VULNERABILITY, listos para pruebas
-2. **PRÓXIMO PASO**: Ejecutar pruebas con hardware real antes de hacer merge
-3. **BACKUP**: Rama PRODUCCION permanece intacta
-4. **DOCUMENTACIÓN**: Ver `VULNERABILITY_REPORT.md` para detalles completos de cada vulnerabilidad
+### Debug (sin periféricos) — ya validado en este ciclo
 
----
+- [x] El kiosco arranca, anuncia "Inicializando Pay+" y llega a la pantalla de bienvenida.
+- [x] Formulario: un documento nuevo pide los datos y **se guarda** (verificado en log); un documento ya guardado **se autocompleta**.
+- [x] Pago con los botones de prueba ($20.000 / $50.000) y devuelta calculada correctamente.
+- [x] Tirilla en PDF (`Receipts/`) y calificación guardada.
+- [x] El video dura lo que duró el pago y su velocidad es correcta.
+- [ ] Pago exacto (sin devuelta) y **cancelación** con devolución completa del dinero.
+- [ ] Corte de red durante el pago: la cola reintenta y deja el rastro esperado en el log.
 
-### 🚀 Procedimiento para Merge (Después de Pruebas Exitosas)
+### Release | x86 con dinero y periféricos reales — pendiente
 
-```bash
-# 1. Verificar que las pruebas pasaron
-cd Tests
-.\Run-SecurityTests.ps1
-
-# 2. Hacer commit de los cambios
-git add -A
-git commit -m "CORRECCION CRITICA: Reparacion de vulnerabilidades de seguridad"
-
-# 3. Push a repositorio remoto
-git push origin VULNERABILITY
-
-# 4. Crear Pull Request para merge a PRODUCCION
-git checkout PRODUCCION
-git merge VULNERABILITY
-
-# 5. Eliminar rama temporal (opcional)
-git branch -d VULNERABILITY
-```
+- [ ] La aplicación abre e inicializa Arduino y CDMS sin modales de error.
+- [ ] La suma de **billetes y monedas reales** se refleja en pantalla.
+- [ ] Cancelar devuelve todo lo ingresado.
+- [ ] Pago completo: devuelve el cambio y sale la **tirilla W-80**.
+- [ ] No aparecen los botones de prueba de Debug.
+- [ ] Los temporizadores muestran 03:00 → 02:30 → 01:30.
+- [ ] El video dura aproximadamente lo mismo que el pago y llega a `bin\Release\...\Videos\`.
+- [ ] Usuario y transacción verificables en la base de la universidad.
 
 ---
 
-**Revisado por**: Análisis Automatizado de Seguridad  
-**Estado**: ⚠️ PENDIENTE DE PRUEBAS CON HARDWARE REAL  
-**Prioridad**: 🔴 ALTA - Corregir antes de próximo despliegue a producción
+## 12. Notas de diseño y mantenimiento
+
+- **Sin base de datos local**: la aplicación eliminó SQLite/Entity Framework; todo pasa por las APIs (`REVISION_TECNICA.md` documenta esa revisión y sus pruebas).
+- **El Dashboard y la UT son sistemas distintos**: el Dashboard es el panel del hospital (transacciones, detalles, calificación); la UT es la base de la universidad (usuario y transacción). Un fallo de la UT **no** revierte el cobro, pero queda registrado en el log.
+- **El temporizador es de la clase base**: cada pantalla declara solo duración y destino. No reintroducir temporizadores por pantalla.
+- **El video no se fuerza a 30 fps**: se graba a la velocidad real de la cámara (~5 fps) y luego se corrige la duración del archivo. Así el video no se oscurece.
+- **La devolución ocurre con la grabación activa** (esperas de 8 s antes de cerrar la captura): el video es la evidencia del dinero devuelto.
+- **Formulario**: se consulta la UT desde los 4 dígitos con 400 ms de espera; el autocompletado solo se limpia si venía de la consulta (nunca lo que el usuario escribió).
+- **Verificación del guardado**: tras guardar un usuario se reconsulta; así el log distingue "la API respondió OK" de "quedó guardado".
+- **Cola de escrituras a la API**: un solo consumidor y reintentos con espera creciente para fallos transitorios de red.
+
+---
+
+## 13. Documentos relacionados
+
+| Documento | Contenido |
+|---|---|
+| `IMPRESION_TIRILLA.md` | Cómo se arma la tirilla (W-80 y PDF), ajustes y diagnóstico |
+| `ESPECIFICACION_VALIDACIONES_FORMULARIO.md` | Especificación detallada de las validaciones del formulario |
+| `REVISION_TECNICA.md` | Revisión técnica: eliminación de la base local, colas, logs, conectividad |
+| `src/ListaErrores.txt` | Mensajes de error de periféricos y su equivalente para el usuario |
+| `resources/FLUJO_UNIVERDIDAD_DEL_TOLIMA_v2.pdf` | Flujo funcional definido por la universidad |
+
+---
+
+**Proyecto**: Hospital Veterinario UT — Universidad del Tolima
+**Desarrollador**: William Ruiz (E-City) — wruiz@e-city.co
