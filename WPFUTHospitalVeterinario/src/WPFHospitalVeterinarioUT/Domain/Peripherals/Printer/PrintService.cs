@@ -51,6 +51,21 @@ namespace Domain.Peripherals
         /// <summary>Carpeta donde se guardan los PDF, relativa a la carpeta del ejecutable.</summary>
         private const string PdfOutputFolder = "Receipts";
 
+        /// <summary>
+        /// Hoja A4 del PDF de revisión. La tirilla se coloca en la esquina superior izquierda a su
+        /// tamaño real (80 mm de ancho), sin estirarla.
+        /// </summary>
+        private const double PdfPageWidthMm = 210.0;
+
+        /// <summary>Alto de la hoja A4 del PDF de revisión.</summary>
+        private const double PdfPageHeightMm = 297.0;
+
+        /// <summary>
+        /// Margen de la hoja del PDF. La tirilla va en la esquina superior izquierda, a su tamaño
+        /// real, y este margen evita que quede pegada al borde al imprimir la hoja.
+        /// </summary>
+        private const double PdfPageMarginMm = 5.0;
+
         /// <summary>Abre el PDF generado para poder revisarlo.</summary>
         private const bool PdfOpenAfterPrint = true;
 
@@ -384,8 +399,9 @@ namespace Domain.Peripherals
                 {
                     generatedFile = SaveReceiptPdf(outputFolder, stamp, canvas);
                     EventLogger.SaveLog(EventType.Info,
-                        $"Sin periféricos: tirilla generada en '{generatedFile}' " +
-                        $"({PdfPageWidthMm(canvas):0.#} x {PdfPageHeightMm(canvas):0.#} mm, {canvas.Width}x{canvas.Height} px).");
+                        $"Sin periféricos: tirilla generada en '{generatedFile}'. " +
+                        $"La tirilla mide {ReceiptWidthMillimeters(canvas):0.#} x {ReceiptHeightMillimeters(canvas):0.#} mm " +
+                        $"y va en la esquina de una hoja de {PdfPageWidthMm:0.#} x {PdfPageHeightMm:0.#} mm.");
                 }
                 catch (Exception ex)
                 {
@@ -408,9 +424,14 @@ namespace Domain.Peripherals
             if (generatedFile != null) OpenGeneratedFile(generatedFile);
         }
 
-        private static double PdfPageWidthMm(Bitmap canvas) => canvas.Width / (ReceiptDesignDpi * ReceiptRenderScale) * 25.4;
+        /// <summary>Resolución real del lienzo (96 ppp de diseño x factor de renderizado).</summary>
+        private static double CanvasDpi => ReceiptDesignDpi * ReceiptRenderScale;
 
-        private static double PdfPageHeightMm(Bitmap canvas) => canvas.Height / (ReceiptDesignDpi * ReceiptRenderScale) * 25.4;
+        private static double ReceiptWidthMillimeters(Bitmap canvas) => canvas.Width / CanvasDpi * 25.4;
+
+        private static double ReceiptHeightMillimeters(Bitmap canvas) => canvas.Height / CanvasDpi * 25.4;
+
+        private static double MillimetersToPoints(double millimeters) => millimeters / 25.4 * 72.0;
 
         /// <summary>Respaldo en imagen, sin depender de nada externo.</summary>
         private static string SaveReceiptImage(string outputFolder, string stamp, Bitmap canvas)
@@ -429,18 +450,31 @@ namespace Domain.Peripherals
         }
 
         /// <summary>
-        /// Arma el PDF: una página cuyo MediaBox mide lo que la tirilla y una imagen JPEG que la
-        /// ocupa por completo. El PDF se escribe a mano para no depender de ninguna impresora.
+        /// Arma el PDF: una hoja A4 con la tirilla en la esquina superior izquierda, a su tamaño
+        /// real de 80 mm y sin estirarla. El PDF se escribe a mano para no depender de ninguna
+        /// impresora ni driver.
         /// </summary>
         private static byte[] BuildReceiptPdf(Bitmap canvas)
         {
             // Tamaño físico en puntos (1 pulgada = 72 puntos). El lienzo está a 96 ppp x 3.
-            double widthPoints = canvas.Width / (ReceiptDesignDpi * ReceiptRenderScale) * 72.0;
-            double heightPoints = canvas.Height / (ReceiptDesignDpi * ReceiptRenderScale) * 72.0;
+            double widthPoints = canvas.Width / CanvasDpi * 72.0;
+            double heightPoints = canvas.Height / CanvasDpi * 72.0;
+
+            double marginPoints = MillimetersToPoints(PdfPageMarginMm);
+            double pageWidthPoints = MillimetersToPoints(PdfPageWidthMm);
+            // Si la tirilla no cupiera en la hoja, la hoja crece para no cortarla.
+            double pageHeightPoints = Math.Max(
+                MillimetersToPoints(PdfPageHeightMm),
+                heightPoints + marginPoints * 2.0);
+
+            // El origen del PDF está abajo a la izquierda: para dejarla en la esquina superior se
+            // desplaza el alto que sobra respecto al borde superior, menos el margen.
+            double offsetX = marginPoints;
+            double offsetY = pageHeightPoints - heightPoints - marginPoints;
 
             byte[] jpeg = EncodeJpeg(canvas);
             byte[] content = Encoding.ASCII.GetBytes(FormattableString.Invariant(
-                $"q\n{widthPoints:0.####} 0 0 {heightPoints:0.####} 0 0 cm\n/Im0 Do\nQ\n"));
+                $"q\n{widthPoints:0.####} 0 0 {heightPoints:0.####} {offsetX:0.####} {offsetY:0.####} cm\n/Im0 Do\nQ\n"));
 
             using var pdf = new MemoryStream();
             var offsets = new long[6];
@@ -467,7 +501,7 @@ namespace Domain.Peripherals
 
             BeginObject(3);
             Write(FormattableString.Invariant(
-                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {widthPoints:0.####} {heightPoints:0.####}] " +
+                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pageWidthPoints:0.####} {pageHeightPoints:0.####}] " +
                 "/Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n"));
 
             BeginObject(4);

@@ -4,7 +4,7 @@
 
 | Compilación | Cómo imprime | Resultado |
 |---|---|---|
-| **`NO_PERIPHERALS`** (Debug) | El **propio programa genera el PDF**; no usa ninguna impresora ni driver | `Receipts\tirilla-AAAAMMDD-HHMMSS.pdf`: una sola página que mide **exactamente el ancho de la w80 (80 mm)** y el alto del contenido. Se abre solo para revisarla. |
+| **`NO_PERIPHERALS`** (Debug) | El **propio programa genera el PDF**; no usa ninguna impresora ni driver | **Hoja A4** (`210 x 297 mm`) con la **tirilla en la esquina superior izquierda, a su tamaño real de 80 mm**, sin estirarla. Se abre solo para revisarla. |
 | **Release** (sin `NO_PERIPHERALS`) | **w80** (cola del sistema) | Igual que siempre: `PrintDocument` → w80 → `MonitorPrintJobs`. El camino del PDF **no se compila**. |
 
 El modo se elige con la constante de compilación `NO_PERIPHERALS`, que el proyecto ya define para
@@ -23,13 +23,17 @@ imagen JPEG. Al no intervenir ningún driver, el tamaño es siempre el correcto.
 
 ## Cómo se arma el PDF
 
-- **Lienzo**: la tirilla se dibuja con las coordenadas de diseño de `BuildPrint` (pensadas a 96 ppp),
-  en un lienzo de **96 ppp x 3 = 288 ppp** para que el texto salga nítido. El tamaño físico no cambia.
-- **Página**: ancho de la w80 (80 mm) y alto del contenido, calculados desde el lienzo.
-- **Contenido**: la imagen ocupa la página completa (`q W 0 0 H 0 0 cm /Im0 Do Q`), sin márgenes.
+- **Hoja**: A4 (210 x 297 mm), con 5 mm de margen.
+- **Tirilla**: en la esquina superior izquierda, **a tamaño físico real (80 mm de ancho)**. No se
+  estira ni se deforma: al no escalarse, sus filas quedan separadas igual que en la tirilla de la w80.
+- **Lienzo**: la tirilla se dibuja con las coordenadas de diseño de `BuildPrint` (pensadas a 96 ppp)
+  en un lienzo de **96 ppp x 3 = 288 ppp**, para que el texto salga nítido sin cambiar su tamaño.
+- **Contenido**: la imagen se coloca con `q W 0 0 H 5mm 5mm cm /Im0 Do Q`, es decir con su tamaño real
+  y desplazada a la esquina (el origen del PDF está abajo a la izquierda).
 - **Imágenes de la tirilla**: nunca más anchas que la tirilla, conservando proporción. La cabecera
-  (`Voucher.png`) mide 828 x 242 px = 219 mm a 96 ppp, es decir más del doble del ancho de la tirilla:
-  ajustada ocupa 80 x 23 mm, y su alto encaja justo antes de la primera línea de texto (`y = 105`).
+  (`Voucher.png`) mide 828 x 242 px = 219 mm a 96 ppp, más del doble del ancho de la tirilla: ajustada
+  ocupa 80 x 23 mm y su alto encaja justo antes de la primera línea de texto (`y = 105`).
+- **Si la tirilla fuera más alta que la hoja**, la hoja crece para no cortarla.
 - **Respaldo**: si el PDF no se pudiera escribir, la tirilla se guarda como **PNG** con el mismo dibujo.
 
 ## Ajustes (constantes en `PrintService`)
@@ -40,6 +44,9 @@ private const bool   PdfOpenAfterPrint  = true;         // abre el PDF al termin
 private const double ReceiptRenderScale = 3.0;          // 96 ppp x 3 = 288 ppp (nitidez)
 private const double ReceiptDesignDpi   = 96.0;         // resolución de diseño de la tirilla
 private const double ReceiptWidthMm     = 80.0;         // ancho de la tirilla de la w80
+private const double PdfPageWidthMm     = 210.0;        // hoja A4 del PDF
+private const double PdfPageHeightMm    = 297.0;
+private const double PdfPageMarginMm    = 5.0;          // margen de la hoja
 ```
 
 `PdfOutputFolder` acepta una ruta absoluta, por ejemplo `D:\TirillasPruebas`, y `PdfOpenAfterPrint`
