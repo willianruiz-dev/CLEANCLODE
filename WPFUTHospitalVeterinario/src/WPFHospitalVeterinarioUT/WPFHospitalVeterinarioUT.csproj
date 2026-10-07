@@ -11,13 +11,10 @@
 		<RootNamespace />
 		<ApplicationIcon>Assets\Images\LogoUT.ico</ApplicationIcon>
 		<Platforms>AnyCPU;x86</Platforms>
-		<!-- Arquitectura actual: el PC controla el dispensador CDMS por dispenserPort. -->
-		<!-- Establecer true solo en quioscos cuyo dispensador de billetes esté cableado al Arduino. -->
-		<DispenserControlledByArduino Condition="'$(DispenserControlledByArduino)' == ''">false</DispenserControlledByArduino>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(DispenserControlledByArduino)' == 'true'">
-		<DefineConstants>$(DefineConstants);DISPENSER_CONTROLLED_BY_ARDUINO</DefineConstants>
+		<!-- Arquitectura de producción híbrida:
+		     - CDMS_CDU.dll + dispenserPort controlan los billetes.
+		     - Arduino/CH340 controla únicamente la devolución en monedas.
+		     DISPENSER_CONTROLLED_BY_ARDUINO se deja intencionalmente sin definir. -->
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
