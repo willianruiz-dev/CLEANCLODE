@@ -167,12 +167,36 @@ namespace Domain.Peripherals.Recorder
 
         private bool InitializeCapture(int source)
         {
-            _capture = new VideoCapture(source);
+            // En Windows OpenCV abre las cámaras con MSMF por defecto y con algunas cámaras USB
+            // ese backend entrega muy pocos cuadros por segundo (medido: ~5 fps). Se intenta
+            // primero DirectShow, que suele ser más constante; si no abre, se usa el backend por
+            // defecto, para no quedarse sin grabación por preferir un backend.
+            _capture = new VideoCapture(source, VideoCaptureAPIs.DSHOW);
+            var backend = "DirectShow";
+
+            if (!_capture.IsOpened())
+            {
+                _capture.Dispose();
+                _capture = new VideoCapture(source);
+                backend = "por defecto";
+            }
+
             if (!_capture.IsOpened())
             {
                 EventLogger.SaveLog(EventType.Error,
                     $"No se pudo abrir la cámara {source}; puede estar desconectada o en uso.");
                 return false;
+            }
+
+            // Que el búfer conserve solo el último cuadro: así lo que se escribe es siempre lo
+            // más reciente y no se arrastra atraso cuando la cámara va lenta.
+            try
+            {
+                _capture.Set(VideoCaptureProperties.BufferSize, 1);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"No se pudo ajustar el búfer de la cámara: {ex.Message}");
             }
 
             var width = Math.Max(640, (int)_capture.Get(VideoCaptureProperties.FrameWidth));
@@ -183,7 +207,7 @@ namespace Domain.Peripherals.Recorder
                 fps = 30;
 
             EventLogger.SaveLog(EventType.Info,
-                $"Cámara {source} lista: {width}x{height}. Fps reportados: {reportedFps:0.##}. Fps con que inicia el archivo: {fps:0.##}.");
+                $"Cámara {source} lista (backend {backend}): {width}x{height}. Fps reportados: {reportedFps:0.##}. Fps con que inicia el archivo: {fps:0.##}.");
 
             _videoWriter = InitializeVideoWriter(width, height, fps);
             return _videoWriter != null;
