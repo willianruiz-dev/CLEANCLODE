@@ -1,9 +1,8 @@
 using Domain;
 using Domain.Enumerables;
 using Domain.UIServices;
-using LocalDataBase.Services;
+using Domain.Validation;
 using Presentation.UserControls.Bases;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -21,7 +20,6 @@ namespace Presentation.UserControls.Flows
     {
         
         public Transaction _ts = Transaction.Instance;
-        private bool isRegistered = false;
         string typeDocument;
         private const string STR_TIMER = "03:00";
 
@@ -34,14 +32,10 @@ namespace Presentation.UserControls.Flows
             Transaction.Instance.transactionProcess.TipoTransaccion = TypeTransaction.Pago;
             Transaction.Instance.transactionProcess.TipoRecaudo = "Pago de factura";
             BtnForm.Visibility = Visibility.Hidden;
-            this.Loaded += OnLoaded;
             this.Unloaded += OnUnloaded;
 
             GoTimer();
 
-        }
-        private void OnLoaded(object sender, RoutedEventArgs e)
-        {
         }
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
@@ -61,99 +55,30 @@ namespace Presentation.UserControls.Flows
             }
         }
 
-       
-        private async void TxtDocument_TextChanged(object sender, TextChangedEventArgs e)
+        private void TxtDocument_TextChanged(object sender, TextChangedEventArgs e)
         {
-            TextBox? textBox = sender as TextBox;
-            if (!string.IsNullOrEmpty(textBox?.Text))
-            {
-                // Mostrar indicador de carga
-                this.Cursor = Cursors.Wait;
-                
-                try
-                {
-                    var registeredUser = (await DB_PersonalInfoService.GetByDocument(textBox?.Text ?? string.Empty)).FirstOrDefault();
-                    if(registeredUser == null)
-                    {
-                        return;
-                    }
-                    isRegistered = true;
-                    _ts.customFlows.generaLInformationClient.AssignValues(registeredUser);
-                }
-                finally
-                {
-                    // Restaurar cursor normal
-                    this.Cursor = Cursors.Arrow;
-                }
-            }
-        }
-        
-       
-
-        private async void BtnForm_MouseDown(object sender, MouseButtonEventArgs e)
-        {
-            if (TypeDocument.SelectedItem == null)
-            {
-                _nav.ShowModal("Por favor, seleccione su tipo de documento.", new InfoModal());
-                return;
-
-            }
-            if (string.IsNullOrWhiteSpace(_ts.customFlows.generaLInformationClient.Document))
-            {
-                _nav.ShowModal("Por favor, ingrese su número de documento.", new InfoModal());
-
-
-                return;  // Retorna temprano para evitar que el usuario continúe
-            }
-            if (!IsNumeric(_ts.customFlows.generaLInformationClient.Document))
-            {
-                _nav.ShowModal("Por favor, ingrese un número de documento válido.", new InfoModal());
-
-
-                return;
-            }
-            if (string.IsNullOrWhiteSpace(_ts.customFlows.generaLInformationClient.FirstName))
-            {
-                _nav.ShowModal("Por favor, ingrese sus  nombres.", new InfoModal());
-                return;
-            }
-            if (string.IsNullOrWhiteSpace(_ts.customFlows.generaLInformationClient.LastName))
-            {
-                _nav.ShowModal("Por favor, ingrese sus  apellidos.", new InfoModal());
-                return;
-            }
-            if (string.IsNullOrWhiteSpace(_ts.customFlows.generaLInformationClient.Mobile))
-            {
-                _nav.ShowModal("Por favor, ingrese su número de celular.", new InfoModal());
-                return;
-            }
-            if (!IsNumeric(_ts.customFlows.generaLInformationClient.Mobile))
-            {
-                _nav.ShowModal("Por favor, ingrese un número de celular válido.", new InfoModal());
-
-
-                return;
-            }
-            if (!IsValidEmail(_ts.customFlows.generaLInformationClient.Email))
-            {
-                _nav.ShowModal("Por favor, ingrese un correo electrónico válido.", new InfoModal());
-                return;
-            }
-            _ts.paymentProcess.Documento = _ts.customFlows.generaLInformationClient.Document;
-            if(!isRegistered && !(await DB_PersonalInfoService.Create(_ts.customFlows.generaLInformationClient.GenerateDBUserPersonalInfo())))
-            {
-                _nav.ShowModal("No fue posible almacenar su información personal para futuras ocasiones. Sin embargo, podrá continuar con la transacción iniciada.", new InfoModal());
-            }
-            Dispatcher.Invoke(() => GoTo(new ReferenceToPayUC()));
-
+            // El documento se conserva mediante el binding; no se consulta almacenamiento local.
         }
 
-       
-        private bool IsValidEmail(string email)
+        private void BtnForm_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            // Regular expression to validate email
-            string pattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
-            return Regex.IsMatch(email, pattern);
+            var personalInfo = _ts.customFlows.generaLInformationClient;
+            var validationError = PersonalInformationValidator.GetValidationError(
+                TypeDocument.SelectedItem != null,
+                personalInfo.Document,
+                personalInfo.FirstName,
+                personalInfo.LastName,
+                personalInfo.Mobile,
+                personalInfo.Email);
+
+            if (validationError != null)
+            {
+                _nav.ShowModal(validationError, new InfoModal());
+                return;
+            }
+
+            _ts.paymentProcess.Documento = personalInfo.Document;
+            GoTo(new ReferenceToPayUC());
         }
 
         public void GoTimer()
@@ -241,7 +166,7 @@ namespace Presentation.UserControls.Flows
 
         private void TxtEmail_changed(object sender, TextChangedEventArgs e)
         {
-            var a = 1;
+            // El valor se actualiza mediante binding.
         }
     }
 }
