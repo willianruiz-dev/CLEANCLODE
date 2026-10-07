@@ -2,7 +2,7 @@
 
 Aplicación de **kiosco** en WPF (.NET 6) para el pago de facturas y recaudos del Hospital Veterinario de la Universidad del Tolima. El usuario ingresa su documento, sus datos personales y el valor a pagar; la máquina **recibe dinero en efectivo, entrega la devuelta e imprime la tirilla**, y todo el proceso queda registrado en dos sistemas por API y **grabado en video**.
 
-> **Documentación vigente.** Reemplaza al README anterior, que describía componentes que ya no existen en el proyecto (base de datos local SQLite, .NET Framework 4.8, un único `HospitalApiService` y notificaciones de errores por correo con `EmailSender`). Reescrita el **2026-10-07** contra el código actual.
+> **Documentación vigente.** Reemplaza al README anterior, que describía componentes que ya no existen en el proyecto (base de datos local SQLite, .NET Framework 4.8, un único `HospitalApiService` y notificaciones de errores por correo con `EmailSender`, **retiradas del proyecto hace tiempo**). Reescrita el **2026-10-07** contra el código actual.
 
 ---
 
@@ -488,6 +488,7 @@ Líneas clave para diagnosticar:
 - **Formulario**: se consulta la UT desde los 4 dígitos con 400 ms de espera; el autocompletado solo se limpia si venía de la consulta (nunca lo que el usuario escribió).
 - **Verificación del guardado**: tras guardar un usuario se reconsulta; así el log distingue "la API respondió OK" de "quedó guardado".
 - **Cola de escrituras a la API**: un solo consumidor y reintentos con espera creciente para fallos transitorios de red.
+- **Sin notificación por correo**: el envío automático de correos **ya no forma parte de la aplicación** (se retiró hace tiempo); los errores críticos y las advertencias quedan únicamente en los logs. No hay claves de correo en `App.config` ni carpetas de log de correo.
 
 ---
 
