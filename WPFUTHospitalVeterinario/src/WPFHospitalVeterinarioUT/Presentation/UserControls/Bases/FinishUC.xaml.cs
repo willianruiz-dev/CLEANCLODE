@@ -30,7 +30,7 @@ namespace Presentation.UserControls.Bases
     public partial class FinishUC : AppUserControl
     {
         private const string STR_TIMER = "01:30";
-        private TimerGeneric? _timer;
+        private readonly TimerService _timer = new();
 
         private ObservableCollection<CalificacionData> _listCalificacion = new();
         private FinishViewModel _viewModel = new();
@@ -251,28 +251,11 @@ namespace Presentation.UserControls.Bases
         {
             try
             {
-                _timer?.Dispose();
-                _timer = new TimerGeneric(STR_TIMER);
-
                 TxtTimer.Text = STR_TIMER;
 
-                _timer.CallBackTimeOut = () =>
-                {
-
-                    Dispatcher.Invoke(() => GoTo(new PublicityUC()));
-
-
-                };
-
-                _timer.CallBackTick = stringTimer =>
-                {
-                    Dispatcher.BeginInvoke((Action)delegate
-                    {
-                        TxtTimer.Text = stringTimer;
-
-                    });
-                };
-
+                _timer.Start(STR_TIMER,
+                    onTick: time => TxtTimer.Text = time,
+                    onTimeout: () => GoTo(new PublicityUC()));
             }
             catch (Exception ex)
             {
@@ -282,15 +265,7 @@ namespace Presentation.UserControls.Bases
 
         public void StopTimer()
         {
-            try
-            {
-                _timer?.Dispose();
-                _timer = null;
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error, $"Ocurrió un error en tiempo de ejecución: {ex.Message}", ex);
-            }
+            _timer.Stop();
         }
         #endregion
 

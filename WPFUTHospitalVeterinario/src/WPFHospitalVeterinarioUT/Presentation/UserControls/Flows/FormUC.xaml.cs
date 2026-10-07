@@ -62,7 +62,7 @@ namespace Presentation.UserControls.Flows
         /// <summary>Rojo del proyecto (Fonts.xaml) para el campo que aún no está bien.</summary>
         private Brush ErrorBrush => _errorBrush ??= TryFindResource("ERRORCOLOR") as Brush ?? Brushes.Red;
 
-        private TimerGeneric? _timer;
+        private readonly TimerService _timer = new();
 
         public FormUC()
         {
@@ -451,28 +451,11 @@ namespace Presentation.UserControls.Flows
         {
             try
             {
-                _timer?.Dispose();
-                _timer = new TimerGeneric(STR_TIMER);
-
                 TxtTimer.Text = STR_TIMER;
 
-                _timer.CallBackTimeOut = () =>
-                {
-
-                    Dispatcher.Invoke(() => GoTo(new PublicityUC()));
-
-
-                };
-
-                _timer.CallBackTick = stringTimer =>
-                {
-                    Dispatcher.BeginInvoke((Action)delegate
-                    {
-                        TxtTimer.Text = stringTimer;
-
-                    });
-                };
-
+                _timer.Start(STR_TIMER,
+                    onTick: time => TxtTimer.Text = time,
+                    onTimeout: () => GoTo(new PublicityUC()));
             }
             catch (Exception ex)
             {
@@ -482,15 +465,7 @@ namespace Presentation.UserControls.Flows
 
         public void StopTimer()
         {
-            try
-            {
-                _timer?.Dispose();
-                _timer = null;
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error, $"Ocurrió un error en tiempo de ejecución: {ex.Message}", ex);
-            }
+            _timer.Stop();
         }
 
 

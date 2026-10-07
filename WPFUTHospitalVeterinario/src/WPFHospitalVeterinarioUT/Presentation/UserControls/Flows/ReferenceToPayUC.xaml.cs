@@ -21,7 +21,7 @@ namespace Presentation.UserControls.Flows
     {
         private const string STR_TIMER = "02:30";
         private Transaction _ts;
-        private TimerGeneric? _timer;
+        private readonly TimerService _timer = new();
         public ReferenceToPayUC()
         {
             InitializeComponent();
@@ -193,28 +193,11 @@ namespace Presentation.UserControls.Flows
         {
             try
             {
-                _timer?.Dispose();
-                _timer = new TimerGeneric(STR_TIMER);
-
                 TxtTimer.Text = STR_TIMER;
 
-                _timer.CallBackTimeOut = () =>
-                {
-
-                    Dispatcher.Invoke(() => GoTo(new PublicityUC()));
-
-
-                };
-
-                _timer.CallBackTick = stringTimer =>
-                {
-                    Dispatcher.BeginInvoke((Action)delegate
-                    {
-                        TxtTimer.Text = stringTimer;
-
-                    });
-                };
-
+                _timer.Start(STR_TIMER,
+                    onTick: time => TxtTimer.Text = time,
+                    onTimeout: () => GoTo(new PublicityUC()));
             }
             catch (Exception ex)
             {
@@ -224,15 +207,7 @@ namespace Presentation.UserControls.Flows
 
         public void StopTimer()
         {
-            try
-            {
-                _timer?.Dispose();
-                _timer = null;
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error, $"Ocurrió un error en tiempo de ejecución: {ex.Message}", ex);
-            }
+            _timer.Stop();
         }
         #endregion
 
