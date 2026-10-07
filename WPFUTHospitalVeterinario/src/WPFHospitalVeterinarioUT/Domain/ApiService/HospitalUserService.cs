@@ -77,6 +77,13 @@ namespace WPFHospitalVeterinarioUT.ApiService
             if (response.IsSuccessStatusCode)
             {
                 EventLogger.SaveLog(EventType.Info, "Información personal almacenada mediante la API.");
+
+                // La API puede responder OK sin haber guardado realmente (es el caso del
+                // documento nuevo). Una consulta posterior, en segundo plano, confirma que el
+                // documento quedó registrado; si no aparece, queda dicho aquí mismo.
+                if (!string.IsNullOrWhiteSpace(user.Document))
+                    _ = VerifyStoredAsync(user.Document);
+
                 return true;
             }
 
@@ -85,6 +92,32 @@ namespace WPFHospitalVeterinarioUT.ApiService
                 $"La API no pudo almacenar la información personal. HTTP {(int)response.StatusCode}.",
                 body);
             return false;
+        }
+
+        /// <summary>
+        /// Comprueba, en segundo plano, que el documento que la API dijo haber guardado
+        /// realmente quedó registrado. No interfiere con el flujo del formulario.
+        /// </summary>
+        private async Task VerifyStoredAsync(string document)
+        {
+            try
+            {
+                // Pequeña espera por si la propia API tarda en reflejar el guardado.
+                await Task.Delay(1500).ConfigureAwait(false);
+
+                var stored = await GetByDocumentAsync(document).ConfigureAwait(false);
+
+                EventLogger.SaveLog(
+                    stored == null ? EventType.Warning : EventType.Info,
+                    stored == null
+                        ? $"Atención: la API confirmó el guardado del documento {document}, pero una consulta inmediata no lo encuentra registrado."
+                        : $"Verificación: el documento {document} sí quedó registrado en la API UT.");
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Warning,
+                    $"No fue posible verificar el documento {document} en la API UT.", ex);
+            }
         }
     }
 }
