@@ -157,11 +157,6 @@ namespace Presentation.UserControls.Flows
                 var tsCreated = await ApiDashboard.CreateTransaction();
                 if (tsCreated == null) throw new Exception("No se pudo enviar la transacción");
 
-#if NO_PERIPHERALS
-#else
-                // Cada camara es una source incremental
-#endif
-
                 if (loadModal != null)
                 {
                     loadModal.Close();

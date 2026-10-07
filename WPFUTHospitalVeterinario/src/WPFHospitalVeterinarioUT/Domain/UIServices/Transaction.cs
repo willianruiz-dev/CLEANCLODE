@@ -62,11 +62,6 @@ namespace Domain.UIServices
             }
         }
     }
-    //public class ScreensProcess
-    //{
-    //    public IUIManager ScreenManger;
-    //}
-
     public class TransactionProcess {
 
         public ApiService.Models.TransactionDto ApiDto { get; set; }

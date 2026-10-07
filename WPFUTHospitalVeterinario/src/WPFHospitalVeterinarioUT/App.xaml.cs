@@ -1,7 +1,4 @@
-﻿using Domain.Peripherals;
-using Domain;
-using System.Configuration;
-using System.Data;
+﻿using Domain;
 using System.Windows;
 using System.Windows.Controls;
 using VirtualKeyboard.Wpf;
@@ -28,11 +25,11 @@ namespace WPFHospitalVeterinarioUT
                 if (actualApplication.Id != item.Id) item.Kill();
             }
         }
-        private async void AppExit(object? sender, ExitEventArgs e)
+        private void AppExit(object? sender, ExitEventArgs e)
         {
             EventLogger.SaveLog(EventType.Info, $"La aplicación se ha cerrado manualmente con codigo: {e.ApplicationExitCode}");
         }
-        private async void OnUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+        private void OnUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
             // Muestra un mensaje de error
             EventLogger.SaveLog(EventType.FatalError, $"Ocurrió un error fatal en la aplicación, excepción no manejada: {e.Exception.Message}", e.Exception);
