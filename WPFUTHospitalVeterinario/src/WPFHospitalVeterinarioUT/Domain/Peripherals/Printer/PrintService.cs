@@ -2,6 +2,7 @@
 using Domain.Variables;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Drawing.Printing;
 using System.IO;
 using System.Printing;
@@ -83,8 +84,11 @@ namespace Domain.Peripherals
                     // Compilación sin periféricos (Debug): la tirilla se genera como PDF con la
                     // impresora de Windows, conservando el tamaño de la w80, para poder revisarla
                     // sin hardware. En Release este camino no se compila y se usa la w80.
+                    EventLogger.SaveLog(EventType.Info,
+                        $"Sin periféricos: imprimiendo la tirilla con '{PdfPrinterName}'.");
                     PrintPdf();
 #else
+                    EventLogger.SaveLog(EventType.Info, $"Imprimiendo la tirilla con '{W80_PRINTER_NAME}'.");
                     _document.Print();
                     var wasSucess = MonitorPrintJobs();
                     if (!wasSucess) CleanPrintQueue();
@@ -365,56 +369,145 @@ namespace Domain.Peripherals
         /// <summary>
         /// Compilación sin periféricos: la tirilla se manda a la impresora de Windows
         /// (Microsoft Print to PDF) y se guarda como PDF, conservando el ancho y la escala de la
-        /// tirilla de la w80. En Release este camino no se compila: se sigue usando la w80.
+        /// tirilla de la w80. Si la impresora no produce el archivo, se guarda la tirilla como
+        /// imagen para poder revisarla igual. En Release este camino no se compila: se usa la w80.
         /// </summary>
         private static void PrintPdf()
         {
+            string? generatedFile = null;
+
             try
             {
-                _document.PrinterSettings.PrinterName = PdfPrinterName;
-                if (!_document.PrinterSettings.IsValid)
-                {
-                    EventLogger.SaveLog(EventType.Warning,
-                        $"Sin periféricos: la impresora '{PdfPrinterName}' no está instalada, se omite la impresión de la tirilla.");
-                    recentImpressionSuccess = true;
-                    return;
-                }
-
                 var outputFolder = Path.IsPathRooted(PdfOutputFolder)
                     ? PdfOutputFolder
                     : Path.Combine(AppInfo.APP_DIR, PdfOutputFolder);
 
                 Directory.CreateDirectory(outputFolder);
-                var filePath = Path.Combine(outputFolder, $"tirilla-{DateTime.Now:yyyyMMdd-HHmmss}.pdf");
+                var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
 
-                var paperSize = BuildReceiptPaperSize();
-                _document.DefaultPageSettings.PaperSize = paperSize;
-                _document.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
-                _document.PrinterSettings.PrintToFile = true;
-                _document.PrinterSettings.PrintFileName = filePath;
-                _printToPdfFile = true;
+                _document.PrinterSettings.PrinterName = PdfPrinterName;
+                if (!_document.PrinterSettings.IsValid)
+                {
+                    EventLogger.SaveLog(EventType.Warning,
+                        $"Sin periféricos: la impresora '{PdfPrinterName}' no está disponible.");
+                }
+                else
+                {
+                    // Primero con la página del tamaño de la tirilla; si la impresora rechaza ese
+                    // tamaño, se reintenta con el tamaño por defecto de la impresora.
+                    generatedFile = TryGeneratePdf(outputFolder, stamp, useReceiptPageSize: true);
+                    if (generatedFile == null)
+                    {
+                        EventLogger.SaveLog(EventType.Warning,
+                            "Sin periféricos: la impresora no generó el PDF con la página de la tirilla, " +
+                            "se reintenta con el tamaño de página predeterminado.");
+                        generatedFile = TryGeneratePdf(outputFolder, stamp, useReceiptPageSize: false);
+                    }
+                }
 
-                _document.Print();
-
-                EventLogger.SaveLog(EventType.Info,
-                    $"Sin periféricos: tirilla generada en '{filePath}' con el tamaño de la w80 " +
-                    $"({paperSize.Width / 100.0:0.##} x {paperSize.Height / 100.0:0.##} pulgadas).");
-
-                OpenPdf(filePath);
+                if (generatedFile == null)
+                {
+                    generatedFile = SaveReceiptImage(outputFolder, stamp);
+                    EventLogger.SaveLog(EventType.Warning,
+                        $"Sin periféricos: no se pudo generar el PDF; la tirilla se guardó como imagen en '{generatedFile}'.");
+                }
             }
             catch (Exception ex)
             {
-                EventLogger.SaveLog(EventType.Error, $"Error al generar la tirilla en PDF: {ex.Message}", ex);
+                EventLogger.SaveLog(EventType.Error, $"Error al generar la tirilla: {ex.Message}", ex);
             }
             finally
             {
                 // Sin periféricos la tirilla no debe interrumpir el flujo del kiosco.
                 recentImpressionSuccess = true;
             }
+
+            if (generatedFile != null) OpenGeneratedFile(generatedFile);
         }
 
-        /// <summary>Abre el PDF generado para poder revisarlo.</summary>
-        private static void OpenPdf(string filePath)
+        /// <summary>
+        /// Intenta generar el PDF y espera a que la impresora termine de escribirlo.
+        /// Devuelve <c>null</c> si la impresora no produjo el archivo.
+        /// </summary>
+        private static string? TryGeneratePdf(string outputFolder, string stamp, bool useReceiptPageSize)
+        {
+            var filePath = Path.Combine(outputFolder, $"tirilla-{stamp}.pdf");
+
+            try
+            {
+                _document.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+
+                if (useReceiptPageSize)
+                    _document.DefaultPageSettings.PaperSize = BuildReceiptPaperSize();
+
+                _document.PrinterSettings.PrintToFile = true;
+                _document.PrinterSettings.PrintFileName = filePath;
+                _printToPdfFile = true;
+
+                _document.Print();
+
+                if (!WaitForFile(filePath)) return null;
+
+                var size = new FileInfo(filePath).Length;
+                EventLogger.SaveLog(EventType.Info,
+                    $"Sin periféricos: tirilla generada en '{filePath}' " +
+                    $"({(useReceiptPageSize ? "página de la tirilla" : "página predeterminada")}, {size} bytes).");
+
+                return filePath;
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Warning,
+                    $"Sin periféricos: falló la impresión con {(useReceiptPageSize ? "la página de la tirilla" : "la página predeterminada")}: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Espera a que el archivo exista y a que su tamaño se estabilice: la impresora lo escribe
+        /// de forma asíncrona y abrirlo antes de que termine daría un PDF incompleto.
+        /// </summary>
+        private static bool WaitForFile(string filePath, int secondsToWait = 20)
+        {
+            var limit = DateTime.UtcNow.AddSeconds(secondsToWait);
+            long previousSize = -1;
+
+            while (DateTime.UtcNow < limit)
+            {
+                if (File.Exists(filePath))
+                {
+                    long size = new FileInfo(filePath).Length;
+                    if (size > 0 && size == previousSize) return true;
+                    previousSize = size;
+                }
+
+                Thread.Sleep(250);
+            }
+
+            return File.Exists(filePath) && new FileInfo(filePath).Length > 0;
+        }
+
+        /// <summary>Respaldo: guarda la tirilla como imagen, sin depender de ninguna impresora.</summary>
+        private static string SaveReceiptImage(string outputFolder, string stamp)
+        {
+            int width = ReceiptCanvasWidthInPixels();
+            int height = ReceiptContentHeightInPixels();
+
+            using var canvas = new Bitmap(width, height);
+            canvas.SetResolution(ReceiptDesignDpiFloat, ReceiptDesignDpiFloat);
+            using (var canvasGraphics = Graphics.FromImage(canvas))
+            {
+                canvasGraphics.Clear(Color.White);
+                DrawReceipt(canvasGraphics);
+            }
+
+            var filePath = Path.Combine(outputFolder, $"tirilla-{stamp}.png");
+            canvas.Save(filePath, ImageFormat.Png);
+            return filePath;
+        }
+
+        /// <summary>Abre el archivo generado para poder revisarlo.</summary>
+        private static void OpenGeneratedFile(string filePath)
         {
             if (!PdfOpenAfterPrint) return;
             if (!File.Exists(filePath)) return;
@@ -425,7 +518,7 @@ namespace Domain.Peripherals
             }
             catch (Exception ex)
             {
-                EventLogger.SaveLog(EventType.Warning, $"No se pudo abrir el PDF generado: {ex.Message}");
+                EventLogger.SaveLog(EventType.Warning, $"No se pudo abrir el archivo generado '{filePath}': {ex.Message}");
             }
         }
 

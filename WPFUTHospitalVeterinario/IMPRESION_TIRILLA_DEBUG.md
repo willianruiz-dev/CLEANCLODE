@@ -53,7 +53,26 @@ explícitamente a la cola de PDF configurada, no a la impresora predeterminada d
 3. Al terminar aparece `Receipts\tirilla-AAAAMMDD-HHMMSS.pdf` (y se abre si `PdfOpenAfterPrint`).
 4. Comparar el PDF contra una tirilla real: el ancho (80 mm) y el tamaño del texto deben coincidir.
 
-En `Log_application` queda registrada cada tirilla generada, con la ruta y el tamaño en pulgadas.
+## Si no aparece el PDF
+
+El proceso ya no falla en silencio: siempre deja rastro en `Logs\Log_application\LogAAAA-MM-DD.json`
+(junto al ejecutable). Buscar las líneas que empiezan con `Sin periféricos`:
+
+| Línea del log | Significa |
+|---|---|
+| `Sin periféricos: imprimiendo la tirilla con 'Microsoft Print to PDF'.` | Se está usando el camino del PDF (si no aparece, se compiló sin `NO_PERIPHERALS`, es decir Release). |
+| `Sin periféricos: tirilla generada en '...pdf' (página de la tirilla, N bytes).` | Todo correcto. La ruta exacta está ahí. |
+| `... falló la impresión con la página de la tirilla: <motivo>` | La impresora rechazó el tamaño de tirilla; el sistema **reintenta solo** con la página predeterminada. |
+| `... no se pudo generar el PDF; la tirilla se guardó como imagen en '...png'.` | La impresora no produjo el archivo. Siempre queda la imagen para revisar. |
+| `Sin periféricos: la impresora 'Microsoft Print to PDF' no está disponible.` | El nombre de la impresora no coincide con el instalado (revisar `PdfPrinterName`). |
+
+Comportamiento del camino del PDF:
+
+1. Imprime con la página del tamaño de la tirilla y **espera** a que el archivo exista y su tamaño se
+   estabilice antes de darlo por bueno (la impresora escribe de forma asíncrona).
+2. Si la impresora rechaza ese tamaño de página, reintenta con la página predeterminada de la impresora.
+3. Si aun así no hay archivo, guarda la tirilla como **PNG** con el mismo dibujo y la abre.
+4. La impresión nunca interrumpe el flujo del kiosco: `recentImpressionSuccess` queda en `true`.
 
 ## Nota sobre la escala
 
