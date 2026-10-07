@@ -27,6 +27,16 @@ namespace Domain.Peripherals.Recorder
         private bool _disposed;
         private int _frameCount;
 
+        // Control de velocidad de reproducción: la cámara no siempre entrega los cuadros por
+        // segundo que declara, así que al cerrar se compara lo realmente capturado con el
+        // tiempo transcurrido y, si no coinciden, se corrige la velocidad del archivo.
+        private const double PlaybackSpeedTolerance = 0.05;
+        private readonly Stopwatch _recordingClock = new();
+        private int _workingCodec;
+        private double _writerFps;
+        private double _firstFrameSeconds = -1;
+        private double _lastFrameSeconds = -1;
+
         public VideoRecorder(Transaction transaction)
         {
             _transaction = transaction ?? throw new ArgumentNullException(nameof(transaction));
@@ -57,6 +67,9 @@ namespace Domain.Peripherals.Recorder
 
                 IsCameraAvailable = true;
                 _frameCount = 0;
+                _firstFrameSeconds = -1;
+                _lastFrameSeconds = -1;
+                _recordingClock.Restart();
                 _recordingCancellation = new CancellationTokenSource();
                 _isRecording = true;
                 _recordingTask = Task.Run(() => RecordingLoop(_recordingCancellation.Token));
@@ -108,13 +121,20 @@ namespace Domain.Peripherals.Recorder
                 }
 
                 CleanupResources();
+
+                // La cámara no siempre entrega la cantidad de cuadros por segundo que declara.
+                // Si el archivo quedó declarado a más fps de los realmente capturados, el video
+                // se reproduciría acelerado; aquí se ajusta a la velocidad real medida.
+                var effectiveFps = await Task.Run(CorrectPlaybackSpeed).ConfigureAwait(false);
+
                 var finalPath = FinalizeVideoName();
                 var saved = !string.IsNullOrWhiteSpace(finalPath) && File.Exists(finalPath);
+                var duration = effectiveFps > 0 ? _frameCount / effectiveFps : 0;
 
                 EventLogger.SaveLog(
                     saved ? EventType.Info : EventType.Warning,
                     saved
-                        ? $"Grabación finalizada. Frames: {_frameCount}. Archivo: {finalPath}"
+                        ? $"Grabación finalizada. Frames: {_frameCount}. Velocidad: {effectiveFps:0.##} fps. Duración: {duration:0.#} s. Archivo: {finalPath}"
                         : "La grabación finalizó sin generar un archivo de video.");
 
                 return saved;
@@ -157,9 +177,13 @@ namespace Domain.Peripherals.Recorder
 
             var width = Math.Max(640, (int)_capture.Get(VideoCaptureProperties.FrameWidth));
             var height = Math.Max(480, (int)_capture.Get(VideoCaptureProperties.FrameHeight));
-            var fps = _capture.Get(VideoCaptureProperties.Fps);
+            var reportedFps = _capture.Get(VideoCaptureProperties.Fps);
+            var fps = reportedFps;
             if (fps is <= 0 or > 120)
                 fps = 30;
+
+            EventLogger.SaveLog(EventType.Info,
+                $"Cámara {source} lista: {width}x{height}. Fps reportados: {reportedFps:0.##}. Fps con que inicia el archivo: {fps:0.##}.");
 
             _videoWriter = InitializeVideoWriter(width, height, fps);
             return _videoWriter != null;
@@ -182,7 +206,11 @@ namespace Domain.Peripherals.Recorder
                 {
                     writer = new VideoWriter(_currentVideoPath, codec, fps, new Size(width, height));
                     if (writer.IsOpened())
+                    {
+                        _workingCodec = codec;
+                        _writerFps = fps;
                         return writer;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -208,6 +236,10 @@ namespace Domain.Peripherals.Recorder
                     if (_capture?.Read(frame) == true && !frame.Empty())
                     {
                         _videoWriter?.Write(frame);
+                        var seconds = _recordingClock.Elapsed.TotalSeconds;
+                        if (_firstFrameSeconds < 0)
+                            _firstFrameSeconds = seconds;
+                        _lastFrameSeconds = seconds;
                         Interlocked.Increment(ref _frameCount);
                         consecutiveErrors = 0;
                     }
@@ -233,6 +265,101 @@ namespace Domain.Peripherals.Recorder
             finally
             {
                 _isRecording = false;
+            }
+        }
+
+        /// <summary>
+        /// Ajusta la velocidad de reproducción del archivo a la velocidad real de captura.
+        /// Devuelve la velocidad con la que queda el video.
+        /// </summary>
+        private double CorrectPlaybackSpeed()
+        {
+            var frames = _frameCount;
+            var spanSeconds = _lastFrameSeconds - _firstFrameSeconds;
+
+            if (frames < 2 || spanSeconds <= 0 || _writerFps <= 0)
+                return _writerFps;
+
+            var measuredFps = Math.Clamp((frames - 1) / spanSeconds, 1, 120);
+            if (Math.Abs(measuredFps - _writerFps) / _writerFps <= PlaybackSpeedTolerance)
+                return _writerFps;
+
+            if (TryRewriteAtFps(measuredFps))
+            {
+                EventLogger.SaveLog(EventType.Info,
+                    $"Velocidad del video corregida: {_writerFps:0.##} fps declarados -> {measuredFps:0.##} fps reales ({frames} frames en {spanSeconds:0.#} s).");
+                return measuredFps;
+            }
+
+            EventLogger.SaveLog(EventType.Warning,
+                $"No se pudo corregir la velocidad del video ({_writerFps:0.##} fps declarados, {measuredFps:0.##} fps reales); el archivo conserva la velocidad original.");
+
+            return _writerFps;
+        }
+
+        /// <summary>
+        /// Reescribe el archivo recién grabado a la velocidad indicada. Se trabaja sobre una
+        /// copia temporal y solo se reemplaza el original si la reescritura termina bien.
+        /// </summary>
+        private bool TryRewriteAtFps(double fps)
+        {
+            var tempPath = _currentVideoPath + ".fixed.mp4";
+            try
+            {
+                using var source = new VideoCapture(_currentVideoPath);
+                if (!source.IsOpened())
+                    return false;
+
+                var width = (int)source.Get(VideoCaptureProperties.FrameWidth);
+                var height = (int)source.Get(VideoCaptureProperties.FrameHeight);
+                if (width <= 0 || height <= 0)
+                    return false;
+
+                var copiedFrames = 0;
+                using (var target = new VideoWriter(tempPath, _workingCodec, fps, new Size(width, height)))
+                {
+                    if (!target.IsOpened())
+                        return false;
+
+                    using var frame = new Mat();
+                    while (source.Read(frame) && !frame.Empty())
+                    {
+                        target.Write(frame);
+                        copiedFrames++;
+                    }
+
+                    target.Release();
+                }
+
+                // Se libera el archivo de origen antes de reemplazar, para no dejarlo bloqueado.
+                source.Release();
+
+                if (copiedFrames == 0)
+                    return false;
+
+                if (File.Exists(_currentVideoPath))
+                    File.Replace(tempPath, _currentVideoPath, null);
+                else
+                    File.Move(tempPath, _currentVideoPath);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Warning, $"Error corrigiendo la velocidad del video: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(tempPath))
+                        File.Delete(tempPath);
+                }
+                catch
+                {
+                    // Limpieza best-effort: si queda el temporal, no afecta la grabación.
+                }
             }
         }
 
