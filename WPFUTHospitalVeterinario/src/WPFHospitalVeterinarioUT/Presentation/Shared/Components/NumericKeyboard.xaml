@@ -1,0 +1,189 @@
+﻿<UserControl
+    x:Class="UI.Components.NumericKeyboard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
+    x:Name="keyboard"
+    mc:Ignorable="d">
+    <Viewbox Width="auto" Stretch="Uniform">
+        <md:Card
+            Width="400"
+            Height="500"
+            md:ElevationAssist.Elevation="Dp24"
+            Background="Transparent"
+            BorderBrush="Transparent"
+            UniformCornerRadius="20">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border
+                    Grid.Row="0"
+                    Grid.Column="0"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStyle}"
+                    Tag="1">
+                    <Border Style="{StaticResource ButtonInternalStyle}">
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            Style="{StaticResource ButtonTextStyle}"
+                            Text="1" />
+                    </Border>
+                </Border>
+                <Border
+                    Grid.Row="0"
+                    Grid.Column="1"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStyle}"
+                    Tag="2">
+                    <Border Style="{StaticResource ButtonInternalStyle}">
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            Style="{StaticResource ButtonTextStyle}"
+                            Text="2" />
+                    </Border>
+                </Border>
+                <Border
+                    Grid.Row="0"
+                    Grid.Column="2"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStyle}"
+                    Tag="3">
+                    <Border Style="{StaticResource ButtonInternalStyle}">
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            Style="{StaticResource ButtonTextStyle}"
+                            Text="3" />
+                    </Border>
+                </Border>
+                <Border
+                    Grid.Row="1"
+                    Grid.Column="0"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStyle}"
+                    Tag="4">
+                    <Border Style="{StaticResource ButtonInternalStyle}">
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            Style="{StaticResource ButtonTextStyle}"
+                            Text="4" />
+                    </Border>
+                </Border>
+                <Border
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStyle}"
+                    Tag="5">
+                    <Border Style="{StaticResource ButtonInternalStyle}">
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            Style="{StaticResource ButtonTextStyle}"
+                            Text="5" />
+                    </Border>
+                </Border>
+                <Border
+                    Grid.Row="1"
+                    Grid.Column="2"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStyle}"
+                    Tag="6">
+                    <Border Style="{StaticResource ButtonInternalStyle}">
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            Style="{StaticResource ButtonTextStyle}"
+                            Text="6" />
+                    </Border>
+                </Border>
+                <Border
+                    Grid.Row="2"
+                    Grid.Column="0"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStyle}"
+                    Tag="7">
+                    <Border Style="{StaticResource ButtonInternalStyle}">
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            Style="{StaticResource ButtonTextStyle}"
+                            Text="7" />
+                    </Border>
+                </Border>
+                <Border
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStyle}"
+                    Tag="8">
+                    <Border Style="{StaticResource ButtonInternalStyle}">
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            Style="{StaticResource ButtonTextStyle}"
+                            Text="8" />
+                    </Border>
+                </Border>
+                <Border
+                    Grid.Row="2"
+                    Grid.Column="2"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStyle}"
+                    Tag="9">
+                    <Border Style="{StaticResource ButtonInternalStyle}">
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            Style="{StaticResource ButtonTextStyle}"
+                            Text="9" />
+                    </Border>
+                </Border>
+                <Border
+                    Grid.Row="3"
+                    Grid.Column="0"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStylePersonalice}"
+                    Tag="Clear">
+                    <Border>
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            Style="{StaticResource ButtonTextStyle}"
+                            Text="X" />
+                    </Border>
+                </Border>
+                <Border
+                    Grid.Row="3"
+                    Grid.Column="1"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStyle}"
+                    Tag="0">
+                    <Border Style="{StaticResource ButtonInternalStyle}">
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            Style="{StaticResource ButtonTextStyle}"
+                            Text="0" />
+                    </Border>
+                </Border>
+                <Border
+                    Grid.Row="3"
+                    Grid.Column="2"
+                    MouseDown="Keyboard_MouseDown"
+                    Style="{StaticResource ButtonExternalStylePersonalice}"
+                    Tag="Remove">
+                    <Border>
+                        <md:PackIcon Style="{StaticResource IconKeyboardStyle}" />
+                    </Border>
+                </Border>
+            </Grid>
+        </md:Card>
+
+    </Viewbox>
+
+</UserControl>

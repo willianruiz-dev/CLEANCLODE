@@ -1,0 +1,92 @@
+﻿<bases:AppUserControl
+    x:Class="Presentation.UserControls.Bases.TreatmentPolicy"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:Wpf="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+    xmlns:bases="clr-namespace:UI.Bases"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="clr-namespace:Presentation.UserControls.Bases"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    d:DesignHeight="1920"
+    d:DesignWidth="1080"
+    mc:Ignorable="d">
+    <Viewbox Stretch="Uniform">
+        <Grid Width="1080" Height="1920">
+            <Grid.Background>
+                <ImageBrush ImageSource="{StaticResource PAYMENT}" />
+            </Grid.Background>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="1*" />
+                <RowDefinition Height="0.3*" />
+                <RowDefinition Height="2*" />
+
+
+            </Grid.RowDefinitions>
+            <Border Grid.Row="0">
+                <StackPanel Orientation="Horizontal">
+                    <StackPanel
+                        Width="540"
+                        Margin="40,40,0,0"
+                        Orientation="Vertical">
+                        <Image
+                            Width="60"
+                            Height="60"
+                            Margin="24,0,0,0"
+                            HorizontalAlignment="Left"
+                            MouseDown="BtnAtras_MouseDown"
+                            Source="{StaticResource backIcons}" />
+                        <TextBlock
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            FontSize="30"
+                            FontWeight="Bold"
+                            Foreground="{StaticResource TEXTCOLOR}">
+                            Ir Atrás
+                        </TextBlock>
+                    </StackPanel>
+                    <StackPanel Width="501" Margin="-40,40,0,0">
+                        <Image
+                            Width="60"
+                            Height="60"
+                            Margin="0,0,24,0"
+                            HorizontalAlignment="Right"
+                            MouseDown="BtnSalir_MouseDown"
+                            Source="{StaticResource exitIcons}" />
+                        <TextBlock
+                            Margin="0,-0,26,0"
+                            FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                            FontSize="30"
+                            FontWeight="Bold"
+                            Foreground="{StaticResource TEXTCOLOR}"
+                            TextAlignment="Right">
+                            Salir
+                        </TextBlock>
+
+                    </StackPanel>
+                </StackPanel>
+
+            </Border>
+            <Border
+                Grid.Row="1"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+                <TextBlock
+                    Width="726"
+                    FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}"
+                    FontSize="60"
+                    FontWeight="Bold"
+                    Foreground="{StaticResource TEXTCOLOR}"
+                    TextAlignment="Center"
+                    TextWrapping="Wrap"><Run Text="Pol" /><Run Language="es-co" Text="í" /><Run Text="tica de tratamientos de datos" /></TextBlock>
+            </Border>
+            <Border Grid.Row="2">
+                <Wpf:WebView2
+                    x:Name="webView"
+                    Width="869"
+                    Height="1000"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Top" />
+
+            </Border>
+        </Grid>
+    </Viewbox>
+</bases:AppUserControl>

@@ -1,0 +1,107 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net6.0-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UseWPF>true</UseWPF>
+		<PlatformTarget>x86</PlatformTarget>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<RootNamespace />
+		<ApplicationIcon>Assets\Images\LogoUT.ico</ApplicationIcon>
+		<Platforms>AnyCPU;x86</Platforms>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<DefineConstants>$(DefineConstants);NO_PERIPHERALS</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
+		<DefineConstants>$(DefineConstants);NO_PERIPHERALS</DefineConstants>
+	</PropertyGroup>
+
+
+
+	<ItemGroup>
+		<None Remove="Assets\Fonts\Gothic\centurygothic.ttf" />
+		<None Remove="Assets\Fonts\Gothic\centurygothic_bold.ttf" />
+		<None Remove="Assets\Images\BackGrounds\back_formulario.jpg" />
+		<None Remove="Assets\Images\BackGrounds\back_gracias.jpg" />
+		<None Remove="Assets\Images\BackGrounds\back_hola.jpg" />
+		<None Remove="Assets\Images\BackGrounds\back_ingrese_dinero.jpg" />
+		<None Remove="Assets\Images\BackGrounds\back_pdf.jpg" />
+		<None Remove="Assets\Images\BackGrounds\guia_inicio.jpg" />
+		<None Remove="Assets\Images\Voucher.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="Assets\Images\LogoUT.ico" />
+		<Content Include="Assets\**">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+		<Content Include="Videos\**">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="AutoMapper" Version="12.0.1" />
+		<PackageReference Include="MahApps.Metro" Version="2.4.10" />
+		<PackageReference Include="MaterialDesignThemes" Version="4.9.0" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="7.0.13" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="7.0.13" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="7.0.13">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2651.64" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3" />
+		<PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+		<PackageReference Include="System.IO.Ports" Version="8.0.0" />
+		<PackageReference Include="OpenCvSharp4" Version="4.8.0.20230708" />
+		<PackageReference Include="OpenCvSharp4.runtime.win" Version="4.8.0.20230708" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\LocalDataBase\LocalDataBase.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="MPOST">
+			<HintPath>..\..\resources\MPOST6\MPOST.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Resource Include="Assets\Fonts\Gothic\centurygothic.ttf">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Resource>
+		<Resource Include="Assets\Fonts\Gothic\centurygothic_bold.ttf">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Resource>
+		<Resource Include="Assets\Images\BackGrounds\back_formulario.jpg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Resource>
+		<Resource Include="Assets\Images\BackGrounds\back_gracias.jpg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Resource>
+		<Resource Include="Assets\Images\BackGrounds\back_hola.jpg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Resource>
+		<Resource Include="Assets\Images\BackGrounds\back_ingrese_dinero.jpg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Resource>
+		<Resource Include="Assets\Images\BackGrounds\back_pdf.jpg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Resource>
+		<Resource Include="Assets\Images\BackGrounds\guia_inicio.jpg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</Resource>
+		<Resource Include="Assets\Images\Voucher.png">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Resource>
+	</ItemGroup>
+
+</Project>

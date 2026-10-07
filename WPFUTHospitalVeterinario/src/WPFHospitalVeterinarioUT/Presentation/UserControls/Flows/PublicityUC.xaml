@@ -1,0 +1,32 @@
+﻿<bases:AppUserControl
+    x:Class="Presentation.UserControls.Flows.PublicityUC"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:bases="clr-namespace:UI.Bases"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="clr-namespace:Presentation.UserControls.Flows"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    d:DesignHeight="1920"
+    d:DesignWidth="1080"
+    mc:Ignorable="d">
+
+    <Viewbox Stretch="Uniform">
+        <Grid
+            x:Name="LayoutRoot"
+            Width="1080"
+            Height="1920"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            MouseDown="LayoutRoot_MouseDown">
+            <MediaElement
+                x:Name="mediaElement"
+                Loaded="mediaElement_MediaEnded"
+                LoadedBehavior="Play"
+                MediaEnded="mediaElement_MediaEnded"
+                UnloadedBehavior="Stop"
+                Visibility="Visible" />
+
+        </Grid>
+    </Viewbox>
+
+</bases:AppUserControl>

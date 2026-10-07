@@ -1,0 +1,30 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+
+    <!--  Aplication Colors  -->
+
+    <SolidColorBrush x:Key="PRIMARYCOLOR" Color="#dc272d" />
+    <!--<SolidColorBrush x:Key="SECONDARYCOLOR" Color="#FFFFFF"/>-->
+    <SolidColorBrush x:Key="SECONDARYCOLOR" Color="#00A859" />
+    <SolidColorBrush x:Key="TECLADO" Color="#213a48" />
+
+    <!--  Foregrounds  -->
+    <SolidColorBrush x:Key="LIGTHCOLOR" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="GRAYTHEME" Color="#6c6f71" />
+    <SolidColorBrush x:Key="ERRORCOLOR" Color="#b5202b" />
+    <SolidColorBrush x:Key="SUCCESSCOLOR" Color="#2da047" />
+    <SolidColorBrush x:Key="BACK" Color="#FFF" />
+    <SolidColorBrush x:Key="STARTNORMAL" Color="#999c9d" />
+    <SolidColorBrush x:Key="STARTNORMALRED" Color="#c50a0e" />
+    <SolidColorBrush x:Key="TITLECOLOR" Color="#292f31" />
+    <SolidColorBrush x:Key="TEXTCOLOR" Color="#2b2f34" />
+
+
+
+
+
+    <FontFamily x:Key="CENTURY_GOTHIC_BOLD">pack://application:,,,/Assets/Fonts/Gothic/centurygothic_bold.ttf#Century Gothic</FontFamily>
+    <FontFamily x:Key="CENTURY_GOTHIC">pack://application:,,,/Assets/Fonts/Gothic/centurygothic.ttf#Century Gothic</FontFamily>
+    <FontFamily x:Key="MONSERRAT">pack://application:,,,/Assets/Fonts/Montserrat/Montserrat-VariableFont_wght.ttf#Montserrat</FontFamily>
+
+</ResourceDictionary>

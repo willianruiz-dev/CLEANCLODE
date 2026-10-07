@@ -1,0 +1,26 @@
+﻿<Window x:ClassModifier="internal"
+        x:Class="VirtualKeyboard.Wpf.DefaultKeyboardHost"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:VirtualKeyboard.Wpf"
+        mc:Ignorable="d"
+        WindowState="Maximized" ShowInTaskbar="False" ResizeMode="NoResize" WindowStyle="None" AllowsTransparency="True">
+    <Window.Background>
+        <SolidColorBrush Opacity="0.72" Color="Black"/>
+    </Window.Background>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="2*"/>
+            <RowDefinition Height="2*"/>
+            <RowDefinition Height="2*"/>
+        </Grid.RowDefinitions>
+        <Grid Grid.Row="0" VerticalAlignment="Bottom" Margin="0,0,0,-20">
+            <ContentControl MaxWidth="900" MaxHeight="150" x:Name="KeyboardValueContent"/>
+        </Grid>
+        <Grid Grid.Row="1">
+            <ContentControl MaxWidth="900" MaxHeight="360" x:Name="KeyboardContent"/>
+        </Grid>
+    </Grid>
+</Window>

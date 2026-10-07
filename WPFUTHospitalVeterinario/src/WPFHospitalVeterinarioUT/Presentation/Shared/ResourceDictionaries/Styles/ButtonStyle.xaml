@@ -1,0 +1,108 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+
+
+    <!--  Button External Style  -->
+    <Style x:Key="ButtonExternalStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource TECLADO}" />
+        <Setter Property="Width" Value="90" />
+        <Setter Property="Height" Value="90" />
+        <Setter Property="CornerRadius" Value="60" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+
+    </Style>
+    <Style x:Key="ButtonExternalStylePersonalice" TargetType="Border">
+        <Setter Property="Background">
+            <Setter.Value>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Offset="0.0" Color="#FF9e080e" />
+                    <GradientStop Offset="1.0" Color="#ee1d23" />
+                </LinearGradientBrush>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Width" Value="90" />
+        <Setter Property="Height" Value="90" />
+        <Setter Property="CornerRadius" Value="60" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+
+    </Style>
+
+    <!--  Button Internal Style  -->
+    <Style x:Key="ButtonInternalStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource TECLADO}" />
+        <Setter Property="Width" Value="90" />
+        <Setter Property="Height" Value="90" />
+        <Setter Property="CornerRadius" Value="60" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+
+    </Style>
+
+
+    <!--  Button Select Input Style  -->
+    <Style x:Key="ButtonCheckStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource LIGTHCOLOR}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource PRIMARYCOLOR}" />
+        <Setter Property="BorderThickness" Value="3" />
+
+        <Setter Property="Width" Value="90" />
+        <Setter Property="Height" Value="90" />
+        <Setter Property="CornerRadius" Value="60" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+
+    </Style>
+
+    <!--  Toggle button  -->
+    <Style x:Key="CustomToggleButtonStyleTwo" TargetType="{x:Type ToggleButton}">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Background" Value="{StaticResource BACK}" />
+        <Setter Property="Width" Value="85" />
+        <Setter Property="Height" Value="45" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ToggleButton}">
+                    <Grid>
+                        <!--  Define el tamaño y la posición de la barra con bordes redondeados  -->
+                        <Border
+                            x:Name="PART_OuterRadius"
+                            Width="75"
+                            Height="35"
+                            VerticalAlignment="Center"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="20" />
+
+                        <!--  Define el círculo  -->
+                        <Ellipse
+                            x:Name="PART_Button"
+                            Width="40"
+                            Height="41"
+                            Margin="2"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            Fill="{StaticResource GRAYTHEME}" />
+
+                        <!--  Contenedor para el contenido dentro del botón  -->
+                        <ContentPresenter
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="PART_Button" Property="Fill" Value="#dc272d" />
+                            <Setter TargetName="PART_Button" Property="HorizontalAlignment" Value="Right" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

@@ -1,0 +1,54 @@
+﻿<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+    <!--<SolidColorBrush x:Key="KeyboardBackgroundBrush" Color="{DynamicResource PRIMARYCOLOR}"/>-->
+    <SolidColorBrush x:Key="KeyboardBackgroundAccentBrush" Color="#0FF0" />
+    <SolidColorBrush x:Key="KeyboardForegroundBrush" Color="White" />
+    <sys:Double x:Key="KeyboardIconSize">50</sys:Double>
+    <!--<SolidColorBrush x:Key="UppercaseBrush" Color="#FF006DA0"/>-->
+
+    <Style
+        x:Key="KeyboardButtonStyle"
+        BasedOn="{StaticResource {x:Type Button}}"
+        TargetType="{x:Type Button}">
+        <Setter Property="FontSize" Value="30" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Background" Value="{DynamicResource PRIMARYCOLOR}" />
+        <Setter Property="Foreground" Value="{StaticResource KeyboardForegroundBrush}" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Margin" Value="5" />
+        <Setter Property="Height" Value="Auto" />
+        <Setter Property="Width" Value="Auto" />
+        <Setter Property="FontFamily" Value="{StaticResource MONSERRAT}" />
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+
+    <Style
+        x:Key="KeyboardRepeatButtonStyle"
+        BasedOn="{StaticResource {x:Type RepeatButton}}"
+        TargetType="{x:Type RepeatButton}">
+        <Setter Property="FontSize" Value="30" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Background" Value="{DynamicResource PRIMARYCOLOR}" />
+        <Setter Property="Foreground" Value="{StaticResource KeyboardForegroundBrush}" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Margin" Value="5" />
+        <Setter Property="Height" Value="Auto" />
+        <Setter Property="Width" Value="Auto" />
+    </Style>
+
+    <Style
+        x:Key="KeyboardValueBoxStyle"
+        BasedOn="{StaticResource {x:Type TextBox}}"
+        TargetType="TextBox">
+        <Setter Property="FontSize" Value="40" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{StaticResource PRIMARYCOLOR}" />
+        <Setter Property="Background" Value="{DynamicResource BACK}" />
+        <Setter Property="Margin" Value="25" />
+        <Setter Property="FontFamily" Value="{StaticResource CENTURY_GOTHIC_BOLD}" />
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+</ResourceDictionary>

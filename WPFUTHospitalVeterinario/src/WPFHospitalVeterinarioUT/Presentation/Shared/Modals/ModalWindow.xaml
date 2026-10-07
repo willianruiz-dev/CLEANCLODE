@@ -1,0 +1,60 @@
+﻿<Window x:Class="UI.Modals.ModalWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:md="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:mah="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
+        xmlns:converters="clr-namespace:Presentation.Shared.Converters"
+        xmlns:components="clr-namespace:UI.Components"
+        mc:Ignorable="d"
+        Title="ModalWindow"
+        WindowStyle="None"
+        Topmost="False"
+        WindowState="Maximized"
+        WindowStartupLocation="CenterScreen"
+        Height="1920" Width="1080">
+    <Viewbox x:Name="WindowVB" Stretch="Uniform">
+        <Viewbox.Resources>
+            <converters:ToUpperCase x:Key="ToUpper" />
+        </Viewbox.Resources>
+        <Grid Height="1920" Width="1080">
+            <Grid.Background>
+                <ImageBrush ImageSource="{StaticResource GENERIC}" Stretch="Uniform"/>
+            </Grid.Background>
+            <Grid x:Name="BlueMsgBox" HorizontalAlignment="Center" VerticalAlignment="Center" Width="860" Height="700" Margin="0,0,0,0" d:Visibility="Visible" Visibility="Visible">
+            </Grid>
+            <TextBlock x:Name="TxtTitle" Foreground="{StaticResource PRIMARYCOLOR}"
+                       FontFamily="{StaticResource CENTURY_GOTHIC_BOLD}" Text="{Binding Title, Converter={StaticResource ToUpper}}"
+                       FontWeight="Bold" FontSize="50" Style="{StaticResource TitleStyle}"
+                       Margin="0,450,0,0"
+                       />
+
+            <TextBlock x:Name="TxtMsg" FontSize="32" Text="{Binding Message}" FontFamily="{StaticResource CENTURY_GOTHIC}"
+                       TextWrapping="Wrap" TextAlignment="Center" Margin="190,563,190,727"
+                       />
+
+            <mah:ProgressRing  x:Name="LoadGif" Height="300" Width="300" Margin="0,1198,0,0"
+                              Style="{StaticResource ProgressRingStyle}"/>
+
+            <Grid Height="300" Margin="0, 1200, 0, 0">
+                <components:RoundedButton Title="Aceptar" TouchOrMouseDown="ContinueButton_MouseDown" x:Name="BtnOk"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          d:Visibility="Visible" Visibility="Collapsed" Width="350" Color="{StaticResource PRIMARYCOLOR}"/>
+
+                <components:RoundedButton Title="No" TouchOrMouseDown="BtnNo_MouseDown" x:Name="BtnNo"
+                                          HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="120, 0, 0, 0"
+                                          d:Visibility="Visible" Visibility="Visible" Width="350" Color="{StaticResource GRAYTHEME}"/>
+
+                <components:RoundedButton Title="Sí" TouchOrMouseDown="ContinueButton_MouseDown" x:Name="BtnYes"
+                                          HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0, 0, 120, 0"
+                                          d:Visibility="Visible" Visibility="Visible" Width="350" Color="{StaticResource PRIMARYCOLOR}"/>
+
+            </Grid>
+            <Image Margin="50,1807,792,35" Source="/Assets/Images/Logos/ico_linea_atencion_kiscos.png" Stretch="Fill"/>
+            <Image Margin="803,1816,23,45" Source="/Assets/Images/Logos/LogoDev.png" Stretch="Fill"/>
+
+        </Grid>
+    </Viewbox>
+
+</Window>

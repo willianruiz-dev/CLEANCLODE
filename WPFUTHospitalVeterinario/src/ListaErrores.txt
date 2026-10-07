@@ -1,0 +1,123 @@
+# LISTA DE ERRORES DEL HOSPITAL VETERINARIO UT
+# =============================================
+# Este archivo contiene una lista completa de los mensajes de error que pueden ocurrir en la aplicación
+# y sus respectivas descripciones amigables para el usuario.
+
+## ERRORES DEL ACEPTADOR DE BILLETES
+# ---------------------------------
+
+| Mensaje de Error Original | Mensaje para Usuario |
+|---------------------------|----------------------|
+| "El baúl del billetero aceptador está retirado" | "El baúl del billetero aceptador ha sido retirado. Por favor verifique que esté correctamente instalado." |
+| "Error Aceptador" | "Se ha detectado un problema con el aceptador de billetes. Por favor verifique el dispositivo." |
+| "The Bill property is not valid" | "Se ha detectado un problema con el aceptador de billetes al procesar un billete. Por favor contacte al soporte técnico." |
+| "El puerto del aceptador está ocupado" | "El puerto del aceptador de billetes está siendo utilizado por otro proceso. Por favor reinicie el sistema." |
+| "El aceptador no pudo establecer la conexión" | "No se pudo establecer conexión con el aceptador de billetes. Verifique que esté conectado correctamente." |
+| "Ocurrió un error en tiempo de ejecución" | "Se ha producido un error inesperado. Por favor reinicie la aplicación." |
+| "Error Aceptador Arduino" | "Se ha detectado un problema con el aceptador de billetes. Por favor verifique el dispositivo." |
+
+## ERRORES DE DISPENSADOR
+# ---------------------
+
+| Mensaje de Error Original | Mensaje para Usuario |
+|---------------------------|----------------------|
+| "FATAL: Ocurrió error de comunicación con el dispensador" | "Error de comunicación con el dispensador de billetes. Por favor contacte al soporte técnico." |
+| "El puerto o las denominaciones en App.config no están en el formato correcto" | "Error de configuración del dispensador. Por favor contacte al soporte técnico." |
+| "Error al connectarse al puerto del dispensador" | "No se pudo establecer conexión con el dispensador. Verifique que esté conectado correctamente." |
+| "Error al consultar los sensores del dispensador" | "Error al verificar el estado del dispensador. Por favor contacte al soporte técnico." |
+| "El número de baules conectados es menor a los especificados" | "Configuración incorrecta del dispensador. Por favor contacte al soporte técnico." |
+| "Error, dispensador inicia incorrectamente" | "El dispensador no pudo inicializarse correctamente. Por favor reinicie el sistema." |
+| "Se detectó un atasco" | "Se ha detectado un atasco en el dispensador de billetes. Por favor contacte al soporte técnico." |
+| "No se pudo desatascar, llamar a Julio" | "Se ha detectado un problema grave en el dispensador. Por favor contacte al soporte técnico inmediatamente." |
+| "Un baúl se quedó sin billetes" | "Uno de los compartimentos del dispensador se ha quedado sin billetes. Por favor recárguelo." |
+| "El último baúl se quedó sin billetes" | "El dispensador se ha quedado sin billetes. Por favor recargue los compartimentos." |
+| "Se detectó cantidad máxima de rechazo" | "El dispensador está rechazando demasiados billetes. Por favor contacte al soporte técnico." |
+| "Alguno de los baules de dispensación está quedandose sin billetes" | "El dispensador está quedándose sin billetes. Por favor recargue los compartimentos pronto." |
+
+## ERRORES DE CONEXIÓN Y ARCHIVOS
+# -----------------------------
+
+| Mensaje de Error Original | Mensaje para Usuario |
+|---------------------------|----------------------|
+| "Could not find file" | "Falló la conexión con los periféricos. Intente nuevamente por favor." |
+| "Error de conexión" | "Error de conexión. Verifique su red e intente nuevamente." |
+| "Connection refused" | "No se pudo establecer conexión con el servidor. Verifique su red e intente nuevamente." |
+| "No se pudo establecer la conexión" | "No se pudo establecer conexión con el dispositivo. Verifique que esté conectado correctamente." |
+| "Puerto no disponible" | "El puerto seleccionado no está disponible. Verifique la conexión del dispositivo." |
+| "Timeout" | "Se agotó el tiempo de espera para la conexión. Verifique el dispositivo e intente nuevamente." |
+| "No se obtuvo contenido de la api" | "No se pudo obtener información del servidor. Verifique su conexión a internet." |
+| "Api no respondió satisfactoriamente" | "El servidor no respondió correctamente. Por favor intente más tarde." |
+| "Error deserializando la respuesta" | "Error al procesar la respuesta del servidor. Por favor contacte al soporte técnico." |
+
+## ERRORES DE IMPRESORA
+# -------------------
+
+| Mensaje de Error Original | Mensaje para Usuario |
+|---------------------------|----------------------|
+| "PrintService" | "Se ha detectado un problema con el servicio de impresión. Por favor verifique la impresora." |
+| "Printer" | "Se ha detectado un problema con la impresora. Por favor verifique que esté encendida y conectada." |
+| "No paper" | "La impresora se ha quedado sin papel. Por favor recargue papel e intente nuevamente." |
+| "Printer offline" | "La impresora está desconectada. Por favor verifique la conexión." |
+| "Error en la tarea Start de Impresión" | "Error al iniciar la impresión. Por favor verifique la impresora." |
+| "Se cancelaran impresiones en cola" | "Se han cancelado las impresiones pendientes. Por favor intente nuevamente." |
+
+## ERRORES DE CONFIGURACIÓN
+# -----------------------
+
+| Mensaje de Error Original | Mensaje para Usuario |
+|---------------------------|----------------------|
+| "No se encuentra la clave en App.Config" | "Error en la configuración del sistema. Por favor contacte al soporte técnico." |
+| "Configuration" | "Error en la configuración del sistema. Por favor contacte al soporte técnico." |
+| "AppConfig" | "Error en la configuración de la aplicación. Por favor contacte al soporte técnico." |
+| "Settings" | "Error en la configuración de la aplicación. Por favor contacte al soporte técnico." |
+| "No se enviaron las denominaciones disponibles" | "Error en la configuración de denominaciones. Por favor contacte al soporte técnico." |
+
+## ERRORES DE GRABACIÓN DE VIDEO
+# ---------------------------
+
+| Mensaje de Error Original | Mensaje para Usuario |
+|---------------------------|----------------------|
+| "VideoRecorder: Error al iniciar grabación" | "No se pudo iniciar la grabación de video. Por favor contacte al soporte técnico." |
+| "VideoRecorder: Error al detener grabación" | "No se pudo detener la grabación de video. Por favor contacte al soporte técnico." |
+| "VideoRecorder: Error al verificar estado de grabación" | "Error al verificar el estado de la grabación. Por favor contacte al soporte técnico." |
+
+## ERRORES DE ARDUINO
+# ----------------
+
+| Mensaje de Error Original | Mensaje para Usuario |
+|---------------------------|----------------------|
+| "Error Fatal Arduino" | "Se ha detectado un problema crítico con el controlador de dispositivos. Por favor reinicie el sistema." |
+| "Error desconocido Arduino" | "Se ha detectado un problema con el controlador de dispositivos. Por favor contacte al soporte técnico." |
+
+## ERRORES DE API Y SERVICIOS
+# ------------------------
+
+| Mensaje de Error Original | Mensaje para Usuario |
+|---------------------------|----------------------|
+| "Ocurrió un error desconocido en una de las peticiones en cola" | "Error al procesar una solicitud al servidor. Por favor intente nuevamente." |
+| "Error durante procedimiento de notificación" | "No se pudo enviar la notificación. Por favor contacte al soporte técnico." |
+| "No se obtuvo respuesta del servicio" | "El servicio no está respondiendo. Por favor verifique su conexión a internet." |
+
+## ERRORES GENERALES
+# ---------------
+
+| Mensaje de Error Original | Mensaje para Usuario |
+|---------------------------|----------------------|
+| "Exception" | "Se ha detectado un problema en el sistema. Por favor contacte al soporte técnico." |
+| "Error" | "Se ha detectado un problema en el sistema. Por favor contacte al soporte técnico." |
+| "Fatal" | "Se ha producido un error crítico. Por favor reinicie la aplicación y contacte al soporte técnico." |
+| "System.IO" | "Error de entrada/salida. Verifique los dispositivos conectados e intente nuevamente." |
+| "System.Net" | "Error de red. Verifique su conexión e intente nuevamente." |
+| "System.OutOfMemory" | "La aplicación se ha quedado sin memoria. Por favor reinicie el sistema." |
+| "Database" | "Error de conexión a la base de datos. Por favor contacte al soporte técnico." |
+| "SQL" | "Error en la base de datos. Por favor contacte al soporte técnico." |
+| "Ocurrió un error en tiempo de ejecución" | "Se ha producido un error inesperado. Por favor reinicie la aplicación." |
+
+## ERRORES DE PERIFÉRICOS GENERALES
+# ------------------------------
+
+| Mensaje de Error Original | Mensaje para Usuario |
+|---------------------------|----------------------|
+| "Periférico no encontrado" | "No se encontró el dispositivo periférico. Verifique la conexión e intente nuevamente." |
+| "Dispositivo no responde" | "El dispositivo no está respondiendo. Verifique la conexión e intente nuevamente." |
+| "Scanner" | "Error con el escáner. Por favor verifique que esté conectado correctamente." |

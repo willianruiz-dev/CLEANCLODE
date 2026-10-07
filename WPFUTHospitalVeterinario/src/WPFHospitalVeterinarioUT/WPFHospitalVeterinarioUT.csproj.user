@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <_LastSelectedProfileId>C:\Users\William Ruiz\Desktop\willian\ProyectosE-City\WPFUTHospitalVeterinario\src\WPFHospitalVeterinarioUT\Properties\PublishProfiles\FolderProfile.pubxml</_LastSelectedProfileId>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Update="Presentation\Shared\Components\RoundedButton.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="Presentation\UserControls\Bases\FinishUC.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="Presentation\UserControls\Bases\TreatmentPolicy.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="Presentation\UserControls\Flows\FormUC.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="Presentation\UserControls\Flows\PaymentUC.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="Presentation\UserControls\Flows\PublicityUC.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="Presentation\UserControls\Flows\ReferenceToPayUC.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Page Update="Presentation\Shared\Components\RoundedButton.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Presentation\Shared\Modals\BillReportWindow.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Presentation\Shared\ResourceDictionaries\Constants\ImagesResource.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Presentation\Shared\ResourceDictionaries\Styles\TextBoxStyle.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Presentation\UserControls\Bases\ConfigUC.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Presentation\UserControls\Bases\FinishUC.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Presentation\UserControls\Bases\TreatmentPolicy.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Presentation\UserControls\Bases\WelcomeUC.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Presentation\UserControls\Flows\FormUC.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Presentation\UserControls\Flows\PaymentUC.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Presentation\UserControls\Flows\PublicityUC.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Presentation\UserControls\Flows\ReferenceToPayUC.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+</Project>
