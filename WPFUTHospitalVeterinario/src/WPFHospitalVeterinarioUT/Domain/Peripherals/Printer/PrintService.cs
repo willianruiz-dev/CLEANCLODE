@@ -233,7 +233,7 @@ namespace Domain.Peripherals
             {
                 try
                 {
-                    EventLogger.SaveLog(EventType.Error, $" {printJob.Name} cancelada");
+                    EventLogger.SaveLog(EventType.Info, $"Impresión cancelada de la cola: {printJob.Name}");
                     printJob.Cancel();
                 }
                 catch (Exception ex)
@@ -241,7 +241,6 @@ namespace Domain.Peripherals
                     EventLogger.SaveLog(EventType.Error, $"Ocurrió un error en tiempo de ejecución: {ex.Message}", ex);
                 }
             }
-            EventLogger.SaveLog(EventType.Error, $"Impresionas en cola canceladas");
             }
             catch (PrintQueueException ex)
             {
