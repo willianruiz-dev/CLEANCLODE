@@ -1,6 +1,7 @@
 using ApiService.Models;
 using Domain;
 using Newtonsoft.Json;
+using System.Net.Http;
 using System.Text;
 
 namespace WPFHospitalVeterinarioUT.ApiService
