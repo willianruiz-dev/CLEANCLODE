@@ -33,5 +33,6 @@ namespace ApiService.Models
         public string? TypeOperation { get; set; }
         public DateTime? DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
+        public HospitalTransactionDto Transaction { get; set; } = new();
     }
 }

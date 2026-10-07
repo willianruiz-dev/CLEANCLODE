@@ -291,8 +291,10 @@ namespace WPFHospitalVeterinarioUT.ApiService
                             IdTypeOperation = createdDetail.IdTypeOperation,
                             TypeOperation = createdDetail.TypeOperation,
                             DateCreated = createdDetail.DateCreated,
-                            DateUpdated = createdDetail.DateUpdated
+                            DateUpdated = createdDetail.DateUpdated,
+                            Transaction = ToHospitalTransaction(Transaction.Instance.transactionProcess.ApiDto)
                         };
+                        hospitalDetail.Transaction.TransactionId = Transaction.Instance.IdTransaccionUt;
 
                         if (await _hospitalTransactions.CreateDetailAsync(hospitalDetail) == null)
                         {

@@ -68,7 +68,7 @@ namespace Domain
             if (type.ToString().StartsWith("P", StringComparison.Ordinal))
                 folder = "Log_peripherals";
             else if (type == EventType.Integration ||
-                     callerPath.Contains("ApiService", StringComparison.OrdinalIgnoreCase))
+                     className.StartsWith("Hospital", StringComparison.OrdinalIgnoreCase))
                 folder = "Log_integration";
             else
                 folder = "Log_application";
