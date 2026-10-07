@@ -275,28 +275,8 @@ namespace WPFHospitalVeterinarioUT.ApiService
                     var listTransactionsCreated = requestresponse.response ?? new List<TransactionDetailDto>();
                     EventLogger.SaveLog(EventType.Info, "Respuesta: Creación de detalle de transacción Dashboard", requestresponse);
 
-                    foreach (var createdDetail in listTransactionsCreated)
-                    {
-                        var hospitalDetail = new HospitalTransactionDetailDto
-                        {
-                            IdApi = createdDetail.Id.ToString(),
-                            IdTransaction = Transaction.Instance.IdTransaccionUt,
-                            IdCurrencyDenomination = createdDetail.IdCurrencyDenomination,
-                            CurrencyDenomination = createdDetail.CurrencyDenomination.ToString(),
-                            IdTypeOperation = createdDetail.IdTypeOperation,
-                            TypeOperation = createdDetail.TypeOperation,
-                            DateCreated = createdDetail.DateCreated,
-                            DateUpdated = createdDetail.DateUpdated,
-                            // Swagger exige la navegación Transaction. Se envía solo la llave
-                            // de la fila ya creada para no intentar insertar nuevamente el padre.
-                            Transaction = new HospitalTransactionDto
-                            {
-                                TransactionId = Transaction.Instance.IdTransaccionUt
-                            }
-                        };
-
-                        await _hospitalTransactions.CreateDetailAsync(hospitalDetail);
-                    }
+                    // La API UT actual no permite crear detalles sin intentar insertar
+                    // nuevamente la transacción padre. Dashboard conserva el detalle oficial.
 
                     return listTransactionsCreated;
                 }

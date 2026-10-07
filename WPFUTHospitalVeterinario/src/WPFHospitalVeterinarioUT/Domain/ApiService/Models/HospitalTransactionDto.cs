@@ -21,18 +21,4 @@ namespace ApiService.Models
         public DateTime? DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
     }
-
-    public sealed class HospitalTransactionDetailDto
-    {
-        public int TranDetailId { get; set; }
-        public string? IdApi { get; set; }
-        public int IdTransaction { get; set; }
-        public int IdCurrencyDenomination { get; set; }
-        public string? CurrencyDenomination { get; set; }
-        public int IdTypeOperation { get; set; }
-        public string? TypeOperation { get; set; }
-        public DateTime? DateCreated { get; set; }
-        public DateTime? DateUpdated { get; set; }
-        public HospitalTransactionDto Transaction { get; set; } = new();
-    }
 }

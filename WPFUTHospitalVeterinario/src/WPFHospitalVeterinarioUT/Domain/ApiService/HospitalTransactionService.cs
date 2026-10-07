@@ -54,17 +54,6 @@ namespace WPFHospitalVeterinarioUT.ApiService
             return result != null;
         }
 
-        public async Task<HospitalTransactionDetailDto?> CreateDetailAsync(
-            HospitalTransactionDetailDto detail,
-            CancellationToken cancellationToken = default)
-        {
-            if (detail.IdTransaction <= 0)
-            {
-                EventLogger.SaveLog(EventType.Error,
-                    "No se envió el detalle a UT porque no existe el identificador de la transacción padre.");
-                return null;
-            }
-
             return await SendAsync<HospitalTransactionDetailDto>(
                 HttpMethod.Post,
                 "TransactionDetail",
