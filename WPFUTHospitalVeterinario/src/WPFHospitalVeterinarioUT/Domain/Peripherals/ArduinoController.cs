@@ -87,6 +87,9 @@ namespace Domain.Peripherals
         private ArduinoController() { }
 
         #region Atributes
+        private const string _STR_TIMER = "01:00";
+     
+
         private SerialPort _serialPort;
 
         private MeiAcceptor _mei;
@@ -99,15 +102,23 @@ namespace Domain.Peripherals
 
 
         private const int _SCALE_FACTOR_BILL = 1;
+        private const int _SCALE_FACTOR_COIN = 100;
 
 
+        private decimal _payValue;//Valor a pagar
         private List<Tuple<string, int>> _availDenomsDispenser;
         private List<int> _denominations;
         private decimal _enteredAmount;//Valor ingresado
+        private decimal _deliveryAmount;//Valor entregado
         public decimal DeliveryVal { get; set; }
         private decimal _amountToDispense;//Valor a dispensar
+        private bool _arduinoStatusError;
 
         //Monedero
+        private string _arduinoErrDescription = string.Empty;
+        private string _valuesOK_DP = string.Empty;
+        private string _valuesOK_MD = string.Empty;
+        private string _valuesBX_DP = string.Empty;
         private string _rawReturnCoins = string.Empty;
 
         private bool _peripheralStartSuccess = false;
@@ -383,6 +394,12 @@ namespace Domain.Peripherals
                     return;
                 }
 
+                _arduinoStatusError = true;
+                if (response[2] == "FATAL")
+                    this._arduinoErrDescription = response[3];
+                else
+                    this._arduinoErrDescription = response[2];
+
                 //Evaluar si es necesario invocar Peripheral Error para la inicialización
                 EventLogger.SaveLog(EventType.P_Arduino, $"Error dispensadores: {response[2]}");
                 return;
@@ -390,6 +407,7 @@ namespace Domain.Peripherals
 
             if (response[1] == "AP")
             {
+                _arduinoStatusError = true;
                 if (this._hAcceptorProcess.LastError == response[2])
                     return;
                 EventLogger.SaveLog(EventType.P_Arduino, $"Error Aceptador Arduino: {response[2]}");
@@ -446,6 +464,22 @@ namespace Domain.Peripherals
 
             string responseFull = response[2] + ":" + response[3];
 
+            switch (response[1])
+            {
+                case "OK": // Primero llega el OK y lo guardamos y si hay monedas llega un OK de ultimo
+                    if (response[2] == "DP")
+                        _valuesOK_DP = response[3];
+                    else if (response[2] == "MD")
+                        _valuesOK_MD = response[3];
+                    break;
+                case "BX": // despues del OK llega el BX y también lo guardamos
+                    _valuesBX_DP = response[3];
+                    break;
+                default:
+                    break;
+
+            }
+
             EvaluateDataDispenser(responseFull, typeTO: response[1]);
 
 
@@ -454,6 +488,7 @@ namespace Domain.Peripherals
 
         public void ClearValues()
         {
+            _deliveryAmount = 0;
             _enteredAmount = 0;
             DeliveryVal = 0;
             _rawReturnCoins = string.Empty;
@@ -474,6 +509,8 @@ namespace Domain.Peripherals
             try
             {
                 EventLogger.SaveLog(EventType.P_Arduino, "Iniciando dispensación");
+                _arduinoStatusError = false;
+                _arduinoErrDescription = string.Empty;
                 _amountToDispense = valueDispenser;
 
                 await Dispenser.DispenseAmount((int)_amountToDispense);
@@ -592,6 +629,7 @@ namespace Domain.Peripherals
         {
             try
             {
+                _payValue = payValue;
                 bool isSuccess = false;
                 if (_acceptorDevice == "MEI") isSuccess = _mei.EnableAcceptance();
                 else isSuccess = SendDataArduino(ArduinoCommand.JCM_ON);
@@ -657,6 +695,36 @@ namespace Domain.Peripherals
 
     }
 
+    internal class HandlerDispenserProcess
+    {
+        public string ValuesOK_DP { get; set; } = string.Empty;
+        public string ValuesOK_MD { get; set; } = string.Empty;
+        public string ValuesBX_DP { get; set; } = string.Empty;
+        public List<int> Denominations { get; set; } = new List<int>();
+        public string RealReturn { get; set; } = string.Empty;
+        public int ValueToDispend { get; set; } = 0;
+        public int RemainingValue { get; set; }
+
+        public string LastError { get; set; } = string.Empty;
+
+        public HandlerDispenserProcess(List<int> denominations)
+        {
+
+            Denominations = denominations;
+        }
+        public HandlerDispenserProcess()
+        {
+            LastError = string.Empty;
+            ValuesBX_DP = string.Empty;
+            ValuesOK_DP = string.Empty;
+            ValuesOK_MD = string.Empty;
+            Denominations = new List<int>();
+        }
+
+
+
+
+    }
     internal class HandlerAcceptorProcess
     {
         public string LastError { get; set; } = string.Empty;
