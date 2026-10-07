@@ -1,4 +1,4 @@
-# Handoff — Validaciones reactivas del formulario + teclados por campo
+﻿# Handoff — Validaciones reactivas del formulario + teclados por campo
 
 > **Estado: implementado.** Este documento se conserva como especificación de referencia.
 > Los nombres definitivos en el código son:
@@ -14,8 +14,10 @@
 > - El botón Continuar se deshabilita con `IsEnabled = false` sobre el `Image` existente: bloquea mouse
 >   y táctil sin cambiar un solo píxel (no se puso `Opacity` ni estado "gris").
 > - **Teclado numérico:** no se diseñó uno nuevo. `NumericView` reutiliza el teclado tipo clave que la app
->   ya usa en la pantalla de pago (`UI.Components.NumericKeyboard`: 1-9, 0, `X` y borrar), con el mismo
->   diseño y el mismo tamaño de tecla, escalado por su propio `Viewbox`.
+>   ya usa en la pantalla de pago (`UI.Components.NumericKeyboard`: 1-9, 0, `X` y borrar) y con el mismo
+>   tamaño explícito que allí se usa (`Width="348" Height="404"`). El tamaño debe ir explícito: si se deja
+>   automático, el `Viewbox` interno del teclado se encoge hasta la caja que le ofrece la ventana del teclado
+>   virtual y queda en miniatura.
 > - **Teclado de correo:** alfabeto estándar + fila con `@`, `.`, `_`, `-` a la vista y fila de dominios
 >   frecuentes (`@gmail.com`, `@hotmail.com`, `@outlook.com`, `@yahoo.com`) que insertan el texto completo
 >   de una pulsación para abreviar la escritura. El botón `?$#,` abre los símbolos y `abc/123` regresa al

@@ -7,8 +7,21 @@
              xmlns:components="clr-namespace:UI.Components"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
-    <!--  Teclado numérico tipo clave: el mismo control que usa la pantalla de pago, sin cambiar su diseño.  -->
+    <!--
+        Teclado numérico tipo clave para documento y celular.
+        Es el mismo control de la pantalla de pago y con el mismo tamaño que allí se usa
+        (348 x 404), para que las teclas conserven el tamaño de siempre.
+        El tamaño va explícito: si se deja automático, el Viewbox interno del teclado se
+        encoge hasta la caja que le ofrece la ventana del teclado virtual y queda en miniatura.
+    -->
     <Grid>
-        <components:NumericKeyboard x:Name="Keypad" KeyboardPressed="Keypad_KeyboardPressed" />
+        <components:NumericKeyboard
+            x:Name="Keypad"
+            Width="348"
+            Height="404"
+            Margin="0,30,0,0"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            KeyboardPressed="Keypad_KeyboardPressed" />
     </Grid>
 </UserControl>
