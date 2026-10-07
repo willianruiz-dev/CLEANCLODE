@@ -136,7 +136,7 @@
                                     FontFamily="{StaticResource CENTURY_GOTHIC}"
                                     FontSize="30"
                                     Foreground="{StaticResource TEXTCOLOR}">
-                                    Tipo de documento*
+                                    <TextBlock><Run Text="Tipo de documento" /><Run x:Name="ReqDocumentType" Text="*" /></TextBlock>
                                 </Label>
                                 <Border
                                     Padding="5"
@@ -215,7 +215,7 @@
                                 FontFamily="{StaticResource CENTURY_GOTHIC}"
                                 FontSize="30"
                                 Foreground="{StaticResource TEXTCOLOR}">
-                                Número documento*
+                                <TextBlock><Run Text="Número documento" /><Run x:Name="ReqDocument" Text="*" /></TextBlock>
                             </Label>
                             <Border
                                 Padding="5"
@@ -245,10 +245,12 @@
                         <Label
                             Width="681"
                             Margin="0,20,0,0"
-                            Content="Nombres*"
                             FontFamily="{StaticResource CENTURY_GOTHIC}"
                             FontSize="30"
-                            Foreground="Black" />
+                            Foreground="Black"
+                            >
+                            <TextBlock><Run Text="Nombres" /><Run x:Name="ReqFirstName" Text="*" /></TextBlock>
+                        </Label>
                         <Border
                             Margin="0,0,0,0"
                             Padding="5"
@@ -270,10 +272,12 @@
                         <Label
                             Width="681"
                             Margin="0,20,0,0"
-                            Content="Apellidos*"
                             FontFamily="{StaticResource CENTURY_GOTHIC}"
                             FontSize="30"
-                            Foreground="{StaticResource TEXTCOLOR}" />
+                            Foreground="{StaticResource TEXTCOLOR}"
+                            >
+                            <TextBlock><Run Text="Apellidos" /><Run x:Name="ReqLastName" Text="*" /></TextBlock>
+                        </Label>
                         <Border
                             Padding="5"
                             Background="{StaticResource BACK}"
@@ -293,10 +297,12 @@
                         <Label
                             Width="681"
                             Margin="0,20,0,0"
-                            Content="Número celular*"
                             FontFamily="{StaticResource CENTURY_GOTHIC}"
                             FontSize="30"
-                            Foreground="{StaticResource TEXTCOLOR}" />
+                            Foreground="{StaticResource TEXTCOLOR}"
+                            >
+                            <TextBlock><Run Text="Número celular" /><Run x:Name="ReqMobile" Text="*" /></TextBlock>
+                        </Label>
                         <Border
                             Padding="5"
                             Background="{StaticResource BACK}"
@@ -315,10 +321,12 @@
                         <Label
                             Width="681"
                             Margin="0,20,0,0"
-                            Content="Correo Electronico*"
                             FontFamily="{StaticResource CENTURY_GOTHIC}"
                             FontSize="30"
-                            Foreground="{StaticResource TEXTCOLOR}" />
+                            Foreground="{StaticResource TEXTCOLOR}"
+                            >
+                            <TextBlock><Run Text="Correo Electronico" /><Run x:Name="ReqEmail" Text="*" /></TextBlock>
+                        </Label>
                         <Border
                             Padding="5"
                             Background="{StaticResource BACK}"
@@ -363,10 +371,12 @@
                         <Label
                             Width="584"
                             VerticalAlignment="Center"
-                            Content="Acepto la Politica de tratamientos de datos*"
                             FontFamily="{StaticResource CENTURY_GOTHIC}"
                             FontSize="25"
-                            Foreground="{StaticResource TEXTCOLOR}" />
+                            Foreground="{StaticResource TEXTCOLOR}"
+                            >
+                            <TextBlock><Run Text="Acepto la Politica de tratamientos de datos" /><Run x:Name="ReqPolicy" Text="*" /></TextBlock>
+                        </Label>
                         <ToggleButton
                             Width="85"
                             Height="45"

@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 
 namespace Domain.Validation
 {
@@ -73,6 +73,31 @@ namespace Domain.Validation
         /// <summary>Documento exclusivamente numérico.</summary>
         public static bool IsNumeric(string? value) =>
             !string.IsNullOrEmpty(value) && value.All(char.IsDigit);
+
+        /// <summary>Documento válido: solo números y dentro del largo máximo.</summary>
+        public static bool IsValidDocument(string? value)
+        {
+            var document = value?.Trim();
+            return IsNumeric(document) && document!.Length <= MaxDocumentLength;
+        }
+
+        /// <summary>Nombre o apellido válido: sin números ni símbolos y dentro del largo máximo.</summary>
+        public static bool IsValidNameField(string? value) =>
+            IsValidName(value) && value!.Trim().Length <= MaxNameLength;
+
+        /// <summary>Celular de Colombia válido: exactamente 10 dígitos que comienzan por 3.</summary>
+        public static bool IsValidMobile(string? value) =>
+            MobilePattern.IsMatch(value?.Trim() ?? string.Empty);
+
+        /// <summary>Correo válido: con forma usuario@dominio.tld y dentro del largo máximo.</summary>
+        public static bool IsValidEmail(string? value)
+        {
+            var email = value?.Trim();
+            return !string.IsNullOrWhiteSpace(email) && email!.Length <= MaxEmailLength && EmailPattern.IsMatch(email);
+        }
+
+        // Estas reglas por campo son las mismas que usa GetValidationError, en un solo lugar: así el
+        // asterisco del formulario y el mensaje del modal nunca pueden decir cosas distintas.
 
         /// <summary>Nombre o apellido sin números.</summary>
         public static bool IsValidName(string? value) =>

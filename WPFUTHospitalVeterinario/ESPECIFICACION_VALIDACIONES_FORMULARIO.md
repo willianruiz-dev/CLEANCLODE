@@ -330,6 +330,28 @@ El teclado virtual es compartido: `App.xaml.cs:22` registra el handler de clase 
 - No agregues `TouchDown`/`StylusDown` nuevos salvo que haga falta; si necesitas uno, registra ambos (`MouseDown` + `TouchDown`, como hace `TouchableControl.cs`) para no perder ninguno de los dos modos.
 - Verifica en pantalla táctil que: el teclado numérico aparece al tocar documento/celular, el de correo al tocar correo, y que ningún `TextChanged` propio interfiere con el cursor del teclado (`CaretPosition` lo maneja `AdvancedTextBox`).
 
+### 4.6 Asteriscos reactivos (color por campo)
+
+Cada campo obligatorio tiene su asterisco en un `Run` propio con `x:Name`
+(`ReqDocumentType`, `ReqDocument`, `ReqFirstName`, `ReqLastName`, `ReqMobile`, `ReqEmail`, `ReqPolicy`),
+de modo que se puede pintar sin tocar el texto del rótulo.
+
+Estados del asterisco:
+
+| Estado | Cuándo | Color |
+|---|---|---|
+| Neutro | El usuario todavía no ha pasado por el campo | Hereda el color del rótulo (idéntico a como se veía antes) |
+| Válido | El campo ya cumple la regla | `SUCCESSCOLOR` (verde, `#2da047`) |
+| Pendiente | Ya se tocó (o ya se intentó enviar) y aún no cumple | `ERRORCOLOR` (rojo, `#b5202b`) |
+
+Se pintan en `UpdateRequirementHints()`, dentro del mismo punto único de recálculo que ya ajusta el botón
+Continuar, y usan **los mismos métodos del validador** que arma el mensaje del modal
+(`IsValidDocument`, `IsValidNameField`, `IsValidMobile`, `IsValidEmail`): el color y el mensaje no pueden
+contradecirse. Al intentar enviar con datos incompletos se marcan todos los campos como tocados
+(`MarkAllFieldsTouched()`), así que los que faltan quedan en rojo de una sola vez.
+
+El formulario recién abierto se ve **exactamente** igual que antes: ningún asterisco nace pintado.
+
 ## 5. Lo que NO debes hacer
 
 - No tocar `Domain/Peripherals/**`, `Domain/ApiService/**`, `EventLogger`, `InternetConnectionManager`, `NumericKeyboard.xaml` ni las pantallas `PaymentUC`, `ReferenceToPayUC`, `PublicityUC`, `WelcomeUC`, `FinishUC`.

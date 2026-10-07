@@ -1,4 +1,4 @@
-using Domain;
+﻿using Domain;
 using Domain.Enumerables;
 using Domain.UIServices;
 using Domain.Validation;
@@ -42,6 +42,25 @@ namespace Presentation.UserControls.Flows
 
         /// <summary>Indica si el usuario aceptó la política de tratamiento de datos.</summary>
         private bool _policyAccepted;
+
+        // Campos "tocados": un asterisco no se pinta en rojo antes de que el usuario haya pasado
+        // por el campo. Así el formulario se ve igual que siempre hasta que se interactúa con él.
+        private bool _touchedDocumentType;
+        private bool _touchedDocument;
+        private bool _touchedFirstName;
+        private bool _touchedLastName;
+        private bool _touchedMobile;
+        private bool _touchedEmail;
+        private bool _touchedPolicy;
+
+        private Brush? _successBrush;
+        private Brush? _errorBrush;
+
+        /// <summary>Verde del proyecto (Fonts.xaml) para el campo ya diligenciado bien.</summary>
+        private Brush SuccessBrush => _successBrush ??= TryFindResource("SUCCESSCOLOR") as Brush ?? Brushes.Green;
+
+        /// <summary>Rojo del proyecto (Fonts.xaml) para el campo que aún no está bien.</summary>
+        private Brush ErrorBrush => _errorBrush ??= TryFindResource("ERRORCOLOR") as Brush ?? Brushes.Red;
 
         private TimerGeneric? _timer;
 
@@ -100,6 +119,62 @@ namespace Presentation.UserControls.Flows
             BtnFormArea.Background = BtnForm.Visibility == Visibility.Visible
                 ? Brushes.Transparent
                 : null;
+
+            UpdateRequirementHints();
+        }
+
+        /// <summary>
+        /// Pinta el asterisco de cada campo: queda como siempre (heredado) mientras el usuario no
+        /// haya pasado por el campo, verde cuando el dato ya es válido y rojo cuando ya lo tocó y
+        /// todavía no está bien. Usa las mismas reglas del validador que arma el modal, así que el
+        /// color y el mensaje nunca pueden contradecirse.
+        /// </summary>
+        private void UpdateRequirementHints()
+        {
+            var personalInfo = _ts.customFlows.generaLInformationClient;
+
+            PaintRequirement(ReqDocumentType, _touchedDocumentType, TypeDocument.SelectedItem != null);
+            PaintRequirement(ReqDocument, _touchedDocument,
+                PersonalInformationValidator.IsValidDocument(personalInfo.Document));
+            PaintRequirement(ReqFirstName, _touchedFirstName,
+                PersonalInformationValidator.IsValidNameField(personalInfo.FirstName));
+            PaintRequirement(ReqLastName, _touchedLastName,
+                PersonalInformationValidator.IsValidNameField(personalInfo.LastName));
+            PaintRequirement(ReqMobile, _touchedMobile,
+                PersonalInformationValidator.IsValidMobile(personalInfo.Mobile));
+            PaintRequirement(ReqEmail, _touchedEmail,
+                PersonalInformationValidator.IsValidEmail(personalInfo.Email));
+            PaintRequirement(ReqPolicy, _touchedPolicy, _policyAccepted);
+        }
+
+        /// <summary>Deja el asterisco neutro, verde o rojo según el estado del campo.</summary>
+        private void PaintRequirement(System.Windows.Documents.Run asterisk, bool touched, bool isValid)
+        {
+            if (asterisk == null) return;
+
+            if (!touched)
+            {
+                // Neutro: hereda el color del rótulo, exactamente como se veía antes.
+                asterisk.ClearValue(System.Windows.Documents.Run.ForegroundProperty);
+                return;
+            }
+
+            asterisk.Foreground = isValid ? SuccessBrush : ErrorBrush;
+        }
+
+        /// <summary>
+        /// Al intentar enviar con datos incompletos ya se mostró el modal: a partir de ahí todos los
+        /// asteriscos quedan pintados, para que se vea de una cuáles faltan.
+        /// </summary>
+        private void MarkAllFieldsTouched()
+        {
+            _touchedDocumentType = true;
+            _touchedDocument = true;
+            _touchedFirstName = true;
+            _touchedLastName = true;
+            _touchedMobile = true;
+            _touchedEmail = true;
+            _touchedPolicy = true;
         }
 
         #region Normalización en vivo de los campos
@@ -155,6 +230,7 @@ namespace Presentation.UserControls.Flows
             if (sender is not TextBox textBox || _isAdjustingText)
                 return;
 
+            _touchedFirstName = true;
             var names = AdjustText(textBox, KeepNameCharacters);
             _ts.customFlows.generaLInformationClient.FirstName = names;
             UpdateContinueState();
@@ -165,6 +241,7 @@ namespace Presentation.UserControls.Flows
             if (sender is not TextBox textBox || _isAdjustingText)
                 return;
 
+            _touchedLastName = true;
             var lastNames = AdjustText(textBox, KeepNameCharacters);
             _ts.customFlows.generaLInformationClient.LastName = lastNames;
             UpdateContinueState();
@@ -175,6 +252,7 @@ namespace Presentation.UserControls.Flows
             if (sender is not TextBox textBox || _isAdjustingText)
                 return;
 
+            _touchedMobile = true;
             var mobile = AdjustText(textBox, value => KeepDigitsMax(value, MOBILE_DIGITS));
             _ts.customFlows.generaLInformationClient.Mobile = mobile;
             UpdateContinueState();
@@ -185,6 +263,7 @@ namespace Presentation.UserControls.Flows
             if (sender is not TextBox textBox || _isAdjustingText)
                 return;
 
+            _touchedEmail = true;
             var email = AdjustText(textBox, KeepEmailCharacters);
             _ts.customFlows.generaLInformationClient.Email = email;
             UpdateContinueState();
@@ -194,6 +273,7 @@ namespace Presentation.UserControls.Flows
 
         private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            _touchedDocumentType = true;
             ComboBox comboBox = sender as ComboBox;
             ComboBoxItem selectedItem = comboBox.SelectedItem as ComboBoxItem;
             if (selectedItem != null)
@@ -210,6 +290,7 @@ namespace Presentation.UserControls.Flows
             if (sender is not TextBox textBox || _isAdjustingText)
                 return;
 
+            _touchedDocument = true;
             // El documento solo admite dígitos: se descarta cualquier otro carácter.
             var document = AdjustText(textBox, KeepDigits);
             _ts.customFlows.generaLInformationClient.Document = document;
@@ -333,6 +414,10 @@ namespace Presentation.UserControls.Flows
 
             if (validationError != null)
             {
+                // Ya hay un intento de envío: los asteriscos se pintan para señalar lo que falta.
+                MarkAllFieldsTouched();
+                UpdateRequirementHints();
+
                 _nav.ShowModal(validationError, new InfoModal());
                 return;
             }
@@ -431,6 +516,7 @@ namespace Presentation.UserControls.Flows
 
             if (toggleButton != null)
             {
+                _touchedPolicy = true;
                 _policyAccepted = toggleButton.IsChecked ?? false;
 
                 if (_policyAccepted)
