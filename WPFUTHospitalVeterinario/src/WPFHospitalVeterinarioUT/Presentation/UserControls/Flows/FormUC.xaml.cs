@@ -300,7 +300,10 @@ namespace Presentation.UserControls.Flows
             var cancellationToken = _documentLookupCancellation.Token;
 
             // Evita consultar la API por cada tecla y descarta respuestas de documentos anteriores.
-            if (document.Length < 6)
+            // El retardo de 400 ms es lo que evita consultar en cada tecla; este límite solo
+            // descarta documentos incompletos (1 a 3 dígitos). Estaba en 6 y por eso los
+            // documentos cortos ya registrados no se autocompletaban ni se detectaban.
+            if (document.Length < 4)
             {
                 // Al borrar el documento se descartan los datos que se habían autocompletado.
                 ClearAutoFilledPersonalData();
