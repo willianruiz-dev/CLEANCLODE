@@ -287,9 +287,13 @@ namespace WPFHospitalVeterinarioUT.ApiService
                             TypeOperation = createdDetail.TypeOperation,
                             DateCreated = createdDetail.DateCreated,
                             DateUpdated = createdDetail.DateUpdated,
-                            Transaction = ToHospitalTransaction(Transaction.Instance.transactionProcess.ApiDto)
+                            // Swagger exige la navegación Transaction. Se envía solo la llave
+                            // de la fila ya creada para no intentar insertar nuevamente el padre.
+                            Transaction = new HospitalTransactionDto
+                            {
+                                TransactionId = Transaction.Instance.IdTransaccionUt
+                            }
                         };
-                        hospitalDetail.Transaction.TransactionId = Transaction.Instance.IdTransaccionUt;
 
                         await _hospitalTransactions.CreateDetailAsync(hospitalDetail);
                     }
