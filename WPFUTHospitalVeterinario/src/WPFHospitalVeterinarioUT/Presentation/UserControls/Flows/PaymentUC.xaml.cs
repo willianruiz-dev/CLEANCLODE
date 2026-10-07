@@ -18,7 +18,6 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using UI.Bases;
 using WPFHospitalVeterinarioUT.ApiService;
-using Domain.UIServices.Integrations;
 using UI.Modals;
 using Domain.Peripherals;
 using Domain.UIServices;
@@ -34,7 +33,6 @@ namespace Presentation.UserControls.Flows
         private Transaction _ts;
         private ArduinoController _peripherals;
         private PaymentViewModel _paymentViewModel;
-        private IPaymentProcessManager _procedureManager;
         private VideoRecorder _videoRecorder;
         private bool _isRecording = false;
 
@@ -315,49 +313,15 @@ namespace Presentation.UserControls.Flows
         #region Internal Operation process
         private async Task PaymentProcess()
         {
-            // Verificar si el pago fue cancelado antes de procesar
             if (_isPayCanceled)
             {
                 EventLogger.SaveLog(EventType.Warning, "PaymentProcess bloqueado: pago ya fue cancelado.");
                 return;
             }
 
-            bool isPaySuccess = false;
-            try
-            {
-                //await Application.Current.Dispatcher.Invoke(() => _ts.integrationHelpers._paymentProcedureManager.NotifyPay());
-                EventLogger.SaveLog(EventType.Info, "Pago Completado en integración");
-                _tranStateTemp = StateTransaction.Aprobada;
-                isPaySuccess = true;
-            }
-            catch (ProcedureException ex)
-            {
-                CloseLoadModal();
-                isPaySuccess = false;
-                _nav.ShowModal(ex.Message, new InfoModal());
-                await CancelPay();
-                return;
-            }
-            catch (Exception ex)
-            {
-                CloseLoadModal();
-                isPaySuccess = false;
-                _tranStateTemp = StateTransaction.ErrorServicioTercero;
-                EventLogger.SaveLog(EventType.Error, $"Error durante procedimiento de notificación {ex.Message}", ex);
-                _nav.ShowModal("Se presentó un problema durante el proceso de notificación del pago.", new InfoModal());
-                await CancelPay();
-                return;
-            }
-
-            if (isPaySuccess)
-            {
-                await FinishSuccessfulPay();
-                return;
-            }
-
-            _paymentViewModel.ReturnAmount = _paymentViewModel.EnteredAmount;
-            ReturnMoney(_paymentViewModel.ReturnAmount);
-
+            EventLogger.SaveLog(EventType.Info, "Pago completado; iniciando cierre de transacción.");
+            _tranStateTemp = StateTransaction.Aprobada;
+            await FinishSuccessfulPay();
         }
 
         private async Task FinishSuccessfulPay()

@@ -109,17 +109,6 @@ namespace Domain.UIServices
             });
             return result;
         }
-        
-        
-
-        public void CloseModal() => Application.Current.Dispatcher.Invoke((Action)delegate
-        {
-            if (_currentModal != null)
-            {
-                _currentModal.Close();
-                _currentModal = null;
-            }
-        });
 
 
 

@@ -12,7 +12,6 @@ namespace Domain.UIServices
         public int Seconds;
 
         private System.Timers.Timer _timer;
-        private bool isPaused = false;
 
         public TimerGeneric(string stringTimer)
         {
@@ -42,7 +41,6 @@ namespace Domain.UIServices
         {
             try
             {
-                if (isPaused) return;
                 if (Minutes >= 1)
                 {
                     Seconds--;
@@ -69,11 +67,6 @@ namespace Domain.UIServices
             {
                 EventLogger.SaveLog(EventType.Error, $"Ocurrió un error en tiempo de ejecución {ex.Message}", ex);
             }
-        }
-
-        public void ControlTimer(bool pauseOrder)
-        {
-            isPaused = pauseOrder;
         }
     }
 }

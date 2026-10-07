@@ -1,9 +1,7 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Windows;
-using System.Windows.Input;
 using System.Windows.Media;
-using MahApps.Metro.Controls;
 
 namespace UI.Modals
 {
@@ -34,7 +32,6 @@ namespace UI.Modals
             this.BtnYes.Visibility = _viewModel.TypeModal.BtnYesVisibility;
             this.BtnNo.Visibility = _viewModel.TypeModal.BtnNoVisibility;
             this.LoadGif.Visibility = _viewModel.TypeModal.LoadGifVisibility;
-            //this.IconAlert.Visibility = (_viewModel.TypeModal is InfoModal) ? Visibility.Visible: Visibility.Collapsed;
             if(_viewModel.TypeModal is ConfirmationModal || _viewModel.TypeModal is LoadModal)
             {
                 BlueMsgBox.Visibility = Visibility.Collapsed;
@@ -50,19 +47,9 @@ namespace UI.Modals
 
         }
 
-        private void BtnYes_MouseDown(object sender, EventArgs e)
-        {
-            this.DialogResult = true;
-        }
-
         private void BtnNo_MouseDown(object sender, EventArgs e)
         {
             this.DialogResult = false;
-        }
-
-        private void ContinueButton_TouchDown(object sender, TouchEventArgs e)
-        {
-            BtnOk_Event();
         }
 
         private void ContinueButton_MouseDown(object sender, EventArgs e)

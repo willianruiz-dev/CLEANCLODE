@@ -16,7 +16,6 @@ using System.Windows.Shapes;
 using Domain.UIServices;
 using UI.Bases;
 using Domain;
-using Domain.UIServices.Integrations;
 using System.ComponentModel;
 using UI.Modals;
 using VirtualKeyboard.Wpf;
@@ -33,7 +32,6 @@ namespace Presentation.UserControls.Flows
     /// </summary>
     public partial class ReferenceToPayUC : AppUserControl
     {
-        private IConsultReferencesManager consultReferencesManager;
         private const string STR_TIMER = "02:30";
         private Transaction _ts;
         private ManualInputViewModel _viewModel;
@@ -44,7 +42,6 @@ namespace Presentation.UserControls.Flows
         {
             InitializeComponent();
             _ts = Transaction.Instance;
-            //_consultReferencesManager = consultReferencesManager;
             _viewModel = new ManualInputViewModel();
             this.DataContext = _viewModel;
             Keyboard.KeyboardPressed += OnKeyboardPressed;

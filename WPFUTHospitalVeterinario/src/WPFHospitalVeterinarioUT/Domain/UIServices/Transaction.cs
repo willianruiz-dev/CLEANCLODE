@@ -1,7 +1,6 @@
 using ApiService.Models;
 using Domain.Enumerables;
 using Domain.Peripherals.Recorder;
-using Domain.UIServices.Integrations;
 using Domain.UIServices.Models;
 using System.ComponentModel;
 using WPFHospitalVeterinarioUT.ApiService;
@@ -34,8 +33,6 @@ namespace Domain.UIServices
         public int IdTransaccionApi { get; set; }
         public TransactionProcess transactionProcess { get; set; } = new();
         public PaymentProcess paymentProcess { get; set; } = new();
-        //public ScreensProcess screensProcess { get; set; } = new();
-        public IntegrationHelpers integrationHelpers { get; set; } = new();
         public CustomFlowHelpers customFlows { get; set; } = new();
 
 
@@ -68,12 +65,6 @@ namespace Domain.UIServices
     //{
     //    public IUIManager ScreenManger;
     //}
-
-    public class IntegrationHelpers
-    {
-        public IPaymentProcessManager _paymentProcedureManager;
-        public IConsultReferencesManager _consultReferencesManager;
-    }
 
     public class TransactionProcess {
 
