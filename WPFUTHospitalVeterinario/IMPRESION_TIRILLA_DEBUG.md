@@ -55,8 +55,18 @@ explícitamente a la cola de PDF configurada, no a la impresora predeterminada d
 
 ## Tamaño de la tirilla en el PDF
 
-El PDF se arma con el ancho real de la w80 (**80 mm**) y el alto que ocupa el contenido, y las
-coordenadas se dibujan en un lienzo de **96 ppp** (la resolución con la que está pensado `BuildPrint`).
+La tirilla se coloca **en pulgadas** dentro de la página: su dibujo está pensado a 96 ppp, así que
+su tamaño físico es `píxeles / 96`. Por eso mide **siempre 80 mm de ancho y su alto real**, sin
+depender de la resolución que reporte la impresora ni del tamaño de página que decida usar el driver.
+
+Si el driver ignora el tamaño de tirilla y guarda una **hoja carta/A4**, la tirilla aparece dentro de
+esa hoja **a tamaño verdadero** (una tira de 80 mm), sin deformarse ni desbordarse. La línea
+`Sin periféricos: página del PDF = ...` del log dice qué página se usó realmente.
+
+El lienzo se dibuja a **96 ppp x 3 (288 ppp)** para que el texto salga nítido; el tamaño físico no cambia.
+
+El PDF se arma también con el ancho real de la w80 (**80 mm**) y el alto que ocupa el contenido como
+tamaño de página solicitado (`RawKind = 256`, tamaño definido por el usuario).
 
 La cabecera (`Assets/Images/Voucher.png`) mide **828 x 242 px**, es decir **219 mm de ancho** a 96 ppp:
 dibujada a tamaño natural desbordaba la tirilla y salía cortada. Ahora se ajusta al ancho de la

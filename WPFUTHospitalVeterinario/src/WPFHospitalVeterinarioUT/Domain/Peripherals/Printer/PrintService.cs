@@ -1,6 +1,7 @@
 ﻿using Domain.UIServices;
 using Domain.Variables;
 using System.Diagnostics;
+using System.Globalization;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Drawing.Printing;
@@ -8,6 +9,7 @@ using System.IO;
 using System.Printing;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using Color = System.Drawing.Color;
 
 namespace Domain.Peripherals
@@ -33,6 +35,12 @@ namespace Domain.Peripherals
 
         /// <summary>La misma resolución, en float, para las API de GDI+ que exigen float.</summary>
         private const float ReceiptDesignDpiFloat = (float)ReceiptDesignDpi;
+
+        /// <summary>
+        /// Factor de renderizado del lienzo: se dibuja a 96 ppp x 3 (288 ppp) para que el texto
+        /// del PDF salga nítido. El tamaño físico no cambia, solo la resolución de la imagen.
+        /// </summary>
+        private const double ReceiptRenderScale = 3.0;
 
         /// <summary>Espacio inferior de la tirilla, en píxeles del diseño.</summary>
         private const int ReceiptBottomMarginPx = 40;
@@ -235,22 +243,52 @@ namespace Domain.Peripherals
         /// </summary>
         private static void PrintReceiptToPdfPage(PrintPageEventArgs e)
         {
-            int pageWidthHundredthsInch = e.PageSettings.PaperSize?.Width ?? MillimetersToHundredthsInch(ReceiptWidthMm);
-            int canvasWidth = ReceiptCanvasWidthInPixels();
-            int canvasHeight = ReceiptContentHeightInPixels();
+            int designWidth = ReceiptCanvasWidthInPixels();
+            int designHeight = ReceiptContentHeightInPixels();
 
-            using var canvas = new Bitmap(canvasWidth, canvasHeight);
-            canvas.SetResolution(ReceiptDesignDpiFloat, ReceiptDesignDpiFloat);
+            using var canvas = CreateReceiptCanvas(designWidth, designHeight);
+
+            // La tirilla se coloca en pulgadas: el dibujo está pensado a 96 ppp, así que su tamaño
+            // físico es pixeles / 96. De este modo mide siempre 80 mm de ancho y su alto real,
+            // sin depender de la resolución que reporte la impresora ni del tamaño de página que
+            // decida usar el driver. Si el driver guarda una hoja carta/A4, la tirilla aparece
+            // dentro a tamaño verdadero, sin deformarse ni desbordarse.
+            float inchWidth = designWidth / (float)ReceiptDesignDpi;
+            float inchHeight = designHeight / (float)ReceiptDesignDpi;
+
+            var pageUnit = e.Graphics.PageUnit;
+            e.Graphics.PageUnit = GraphicsUnit.Inch;
+            try
+            {
+                e.Graphics.DrawImage(canvas, 0f, 0f, inchWidth, inchHeight);
+            }
+            finally
+            {
+                e.Graphics.PageUnit = pageUnit;
+            }
+        }
+
+        /// <summary>
+        /// Dibuja la tirilla en un lienzo de alta resolución (96 ppp x 3). El dibujo se hace en las
+        /// coordenadas del diseño y el lienzo las escala, de modo que la tirilla queda nítida sin
+        /// cambiar su tamaño físico.
+        /// </summary>
+        private static Bitmap CreateReceiptCanvas(int designWidth, int designHeight)
+        {
+            int pixelWidth = (int)Math.Round(designWidth * ReceiptRenderScale);
+            int pixelHeight = (int)Math.Round(designHeight * ReceiptRenderScale);
+
+            var canvas = new Bitmap(pixelWidth, pixelHeight);
+            canvas.SetResolution(ReceiptDesignDpiFloat * (float)ReceiptRenderScale, ReceiptDesignDpiFloat * (float)ReceiptRenderScale);
+
             using (var canvasGraphics = Graphics.FromImage(canvas))
             {
                 canvasGraphics.Clear(Color.White);
+                canvasGraphics.ScaleTransform((float)ReceiptRenderScale, (float)ReceiptRenderScale);
                 DrawReceipt(canvasGraphics);
             }
 
-            // El lienzo ocupa exactamente el ancho de la página: nada se recorta y nada se deforma.
-            float pageWidthPx = (float)(e.Graphics.DpiX * pageWidthHundredthsInch / 100.0);
-            float scale = pageWidthPx / canvasWidth;
-            e.Graphics.DrawImage(canvas, 0f, 0f, pageWidthPx, canvasHeight * scale);
+            return canvas;
         }
 
         /// <summary>
@@ -480,6 +518,8 @@ namespace Domain.Peripherals
 
                 if (!WaitForFile(filePath)) return null;
 
+                LogPdfPageSize(filePath);
+
                 var size = new FileInfo(filePath).Length;
                 EventLogger.SaveLog(EventType.Info,
                     $"Sin periféricos: tirilla generada en '{filePath}' " +
@@ -522,20 +562,53 @@ namespace Domain.Peripherals
         /// <summary>Respaldo: guarda la tirilla como imagen, sin depender de ninguna impresora.</summary>
         private static string SaveReceiptImage(string outputFolder, string stamp)
         {
-            int width = ReceiptCanvasWidthInPixels();
-            int height = ReceiptContentHeightInPixels();
-
-            using var canvas = new Bitmap(width, height);
-            canvas.SetResolution(ReceiptDesignDpiFloat, ReceiptDesignDpiFloat);
-            using (var canvasGraphics = Graphics.FromImage(canvas))
-            {
-                canvasGraphics.Clear(Color.White);
-                DrawReceipt(canvasGraphics);
-            }
+            using var canvas = CreateReceiptCanvas(ReceiptCanvasWidthInPixels(), ReceiptContentHeightInPixels());
 
             var filePath = Path.Combine(outputFolder, $"tirilla-{stamp}.png");
             canvas.Save(filePath, ImageFormat.Png);
             return filePath;
+        }
+
+        /// <summary>
+        /// Registra el tamaño de página que realmente quedó en el PDF. Si el driver ignoró el
+        /// tamaño de la tirilla, aquí se ve: es la forma de saber qué está haciendo la impresora.
+        /// </summary>
+        private static void LogPdfPageSize(string filePath)
+        {
+            try
+            {
+                var content = File.ReadAllText(filePath, Encoding.Latin1);
+                var matches = Regex.Matches(content, @"/MediaBox\s*\[\s*([\d\.\-]+)\s+([\d\.\-]+)\s+([\d\.\-]+)\s+([\d\.\-]+)\s*\]");
+
+                double smallestWidth = double.MaxValue;
+                double smallestHeight = 0;
+
+                foreach (Match match in matches)
+                {
+                    double width = double.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) / 72.0;
+                    double height = double.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture) / 72.0;
+                    if (width < smallestWidth)
+                    {
+                        smallestWidth = width;
+                        smallestHeight = height;
+                    }
+                }
+
+                if (smallestWidth == double.MaxValue)
+                {
+                    EventLogger.SaveLog(EventType.Warning,
+                        "Sin periféricos: no se pudo leer el tamaño de página del PDF generado.");
+                    return;
+                }
+
+                EventLogger.SaveLog(EventType.Info,
+                    $"Sin periféricos: página del PDF = {smallestWidth:0.##} x {smallestHeight:0.##} pulgadas " +
+                    $"({smallestWidth * 25.4:0.#} x {smallestHeight * 25.4:0.#} mm). La tirilla mide {ReceiptWidthMm} mm de ancho.");
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Warning, $"No se pudo leer el tamaño de página del PDF: {ex.Message}");
+            }
         }
 
         /// <summary>Abre el archivo generado para poder revisarlo.</summary>
@@ -565,7 +638,9 @@ namespace Domain.Peripherals
             int width = (int)Math.Round(ReceiptCanvasWidthInPixels() / ReceiptDesignDpi * 100.0);
             int height = (int)Math.Round(ReceiptContentHeightInPixels() / ReceiptDesignDpi * 100.0);
 
-            return new PaperSize("Tirilla w80", width, height);
+            // RawKind 256 (DMPAPER_USER) pide al driver un tamaño definido por el usuario. Con el
+            // valor predeterminado (0) muchos drivers ignoran el tamaño y usan el suyo propio.
+            return new PaperSize("Tirilla w80", width, height) { RawKind = 256 };
         }
 
 #endif
