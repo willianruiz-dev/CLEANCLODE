@@ -10,6 +10,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using UI.Bases;
 using UI.Modals;
 
@@ -92,6 +93,13 @@ namespace Presentation.UserControls.Flows
                 personalInfo.Email) == null;
 
             BtnForm.IsEnabled = _policyAccepted && isFormValid;
+
+            // Una imagen deshabilitada no recibe el toque, de modo que el área que la contiene
+            // captura la pulsación para poder indicarle al usuario qué dato falta o está mal.
+            // Solo se activa cuando el botón está a la vista; si está oculto, no captura nada.
+            BtnFormArea.Background = BtnForm.Visibility == Visibility.Visible
+                ? Brushes.Transparent
+                : null;
         }
 
         #region Normalización en vivo de los campos

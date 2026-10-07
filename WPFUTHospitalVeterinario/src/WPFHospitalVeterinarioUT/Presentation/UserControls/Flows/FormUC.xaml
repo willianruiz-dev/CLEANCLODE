@@ -390,12 +390,14 @@
                                 Source="{StaticResource cancelButtons}" />
                         </StackPanel>
                         <StackPanel Width="140" />
-                        <StackPanel>
+                        <StackPanel
+                            x:Name="BtnFormArea"
+                            Background="Transparent"
+                            MouseDown="BtnForm_MouseDown">
                             <Image
                                 x:Name="BtnForm"
                                 Width="284"
                                 Height="71"
-                                MouseDown="BtnForm_MouseDown"
                                 Source="{StaticResource sendButtons}"
                                 Visibility="Hidden" />
                         </StackPanel>

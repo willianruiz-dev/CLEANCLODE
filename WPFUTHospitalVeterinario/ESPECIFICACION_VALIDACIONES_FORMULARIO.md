@@ -12,7 +12,11 @@
 > - El celular **no** bloquea en vivo el primer dígito distinto de `3`: se filtra a solo dígitos (máx. 10)
 >   y el prefijo `3` se valida al enviar, para no alterar lo que el usuario ve mientras escribe.
 > - El botón Continuar se deshabilita con `IsEnabled = false` sobre el `Image` existente: bloquea mouse
->   y táctil sin cambiar un solo píxel (no se puso `Opacity` ni estado "gris").
+>   y táctil sin cambiar un solo píxel (no se puso `Opacity` ni estado "gris"). Como una imagen
+>   deshabilitada no recibe el toque y el usuario no vería ninguna reacción, el `StackPanel` que la
+>   contiene (`BtnFormArea`, con `Background="Transparent"`) captura la pulsación únicamente cuando el
+>   botón está a la vista y muestra el modal con el dato que falta o está mal. Así el botón reacciona
+>   siempre al toque y aun así no permite continuar con el formulario incompleto.
 > - **Números (documento y celular):** el teclado es exactamente el de siempre, sin cambios. La regla
 >   solo se aplica al texto: el campo descarta lo que no sea dígito y el celular se corta a 10.
 > > - **Teclado de correo (lo único que cambia respecto al teclado de siempre):** mismas cinco filas y
