@@ -1,4 +1,4 @@
-﻿using Domain.UIServices;
+using Domain.UIServices;
 using Domain.Variables;
 using System.Net.NetworkInformation;
 using UI.Modals;
@@ -7,59 +7,75 @@ namespace Domain
 {
     public static class InternetConnectionManager
     {
-        private static CancellationTokenSource _cts = new CancellationTokenSource();
+        private static readonly object CancellationLock = new();
+        private static CancellationTokenSource? _cts;
+
         public static async Task<bool> IsConnected()
         {
-            return await Task.Run(() =>
+            try
             {
-                try
-                {
-                    string host = "8.8.8.8";
-
-                    Ping p = new Ping();
-
-                    PingReply reply = p.Send(host, 3000);
-
-                    if (reply.Status == IPStatus.Success)
-                    {
-                        return true;
-                    }
-                }
-                catch { }
-
+                using var ping = new Ping();
+                var reply = await ping.SendPingAsync("8.8.8.8", 3000).ConfigureAwait(false);
+                return reply.Status == IPStatus.Success;
+            }
+            catch (PingException)
+            {
                 return false;
-            });
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
         }
 
         public static async Task StartTestingConnection()
         {
+            CancellationToken token;
+            lock (CancellationLock)
+            {
+                _cts?.Cancel();
+                _cts?.Dispose();
+                _cts = new CancellationTokenSource();
+                token = _cts.Token;
+            }
+
             var navigator = Navigator.Instance;
             ModalWindow? modal = null;
-            _cts = new CancellationTokenSource();
 
-            while (!_cts.Token.IsCancellationRequested)
+            try
             {
-                await Task.Delay(500);
-                if (!await IsConnected())
+                while (!token.IsCancellationRequested)
                 {
-                    if (modal != null) continue;
-                    modal = navigator.ShowLoadModal(Messages.NO_SERVICE+" Se ha perdido la conexión a internet");
-                    continue;
-                }
-                
-                if (modal == null) continue;
-                modal.Close();
-                modal = null;
+                    await Task.Delay(TimeSpan.FromSeconds(2), token);
+                    var isConnected = await IsConnected();
 
+                    if (!isConnected && modal == null)
+                    {
+                        modal = navigator.ShowLoadModal(Messages.NO_SERVICE + " Se ha perdido la conexión a internet");
+                    }
+                    else if (isConnected && modal != null)
+                    {
+                        modal.Close();
+                        modal = null;
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // Finalización normal solicitada por StopVerifyConnection.
+            }
+            finally
+            {
+                modal?.Close();
             }
         }
 
         public static void StopVerifyConnection()
         {
-            _cts.Cancel();
+            lock (CancellationLock)
+            {
+                _cts?.Cancel();
+            }
         }
-
-
-
     }
 }
