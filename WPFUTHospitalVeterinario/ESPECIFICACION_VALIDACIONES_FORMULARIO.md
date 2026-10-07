@@ -2,10 +2,10 @@
 
 > **Estado: implementado.** Este documento se conserva como especificación de referencia.
 > Los nombres definitivos en el código son:
-> `FormUC.UpdateContinueState()`, `FormUC.AdjustText(...)`, `FormUC.TxtFirstName_TextChanged`,
-> `FormUC.TxtLastName_TextChanged`, `FormUC.TxtMobile_TextChanged`, `FormUC.TxtEmail_changed`;
-> `VKeyboard.InputKind` con `KeyboardInputKind`, `KeyboardType.Numeric`, `KeyboardType.Email`
-> y las vistas `NumericView.xaml` / `EmailView.xaml`.
+> `FormUC.UpdateContinueState()`, `FormUC.AdjustText(...)`, `FormUC.ClearAutoFilledPersonalData()`,
+> `FormUC.TxtFirstName_TextChanged`, `FormUC.TxtLastName_TextChanged`, `FormUC.TxtMobile_TextChanged`,
+> `FormUC.TxtEmail_changed`; `VKeyboard.InputKind` con `KeyboardInputKind`, `KeyboardType.Numeric`,
+> `KeyboardType.Email` y las vistas `NumericView.xaml` / `EmailView.xaml`.
 > Los fragmentos de la sección 4 son la propuesta original; ante cualquier diferencia, manda el código.
 >
 > **Decisiones tomadas al implementar:**
@@ -13,8 +13,16 @@
 >   y el prefijo `3` se valida al enviar, para no alterar lo que el usuario ve mientras escribe.
 > - El botón Continuar se deshabilita con `IsEnabled = false` sobre el `Image` existente: bloquea mouse
 >   y táctil sin cambiar un solo píxel (no se puso `Opacity` ni estado "gris").
-> - El teclado de correo reemplaza la fila inferior del alfabético por `@`, `.`, `_`, `-`; el botón de
->   símbolos (`?$#,`) alterna a la vista especial y `abc/123` regresa al teclado de origen.
+> - **Teclado numérico:** no se diseñó uno nuevo. `NumericView` reutiliza el teclado tipo clave que la app
+>   ya usa en la pantalla de pago (`UI.Components.NumericKeyboard`: 1-9, 0, `X` y borrar), con el mismo
+>   diseño y el mismo tamaño de tecla, escalado por su propio `Viewbox`.
+> - **Teclado de correo:** alfabeto estándar + fila con `@`, `.`, `_`, `-` a la vista y fila de dominios
+>   frecuentes (`@gmail.com`, `@hotmail.com`, `@outlook.com`, `@yahoo.com`) que insertan el texto completo
+>   de una pulsación para abreviar la escritura. El botón `?$#,` abre los símbolos y `abc/123` regresa al
+>   teclado de origen.
+> - **Limpieza de campos:** los datos autocompletados desde la API se borran cuando el documento deja de
+>   corresponder a ese usuario (se borra, baja de 6 dígitos o la consulta devuelve que no existe). Solo se
+>   limpian los campos que provinieron de la consulta, no lo que el usuario escribió a mano.
 >
 > **Pendiente:** la validación en Windows de la sección 7. El entorno de revisión no tiene SDK `dotnet`
 > y WPF no compila fuera de Windows, así que el build y la prueba manual quedan para el equipo.

@@ -23,6 +23,7 @@
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
             <Grid Grid.Row="0">
@@ -124,8 +125,22 @@
                 <ContentControl Grid.Column="8" Content="{StaticResource BackspaceButton}" />
             </Grid>
 
-            <!--  Fila de símbolos de correo: @ . _ - siempre a la vista  -->
+            <!--  Dominios frecuentes: abrevian la escritura del correo  -->
             <Grid Grid.Row="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="@gmail.com" FontSize="20" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
+                <Button Grid.Column="1" Content="@hotmail.com" FontSize="20" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
+                <Button Grid.Column="2" Content="@outlook.com" FontSize="20" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
+                <Button Grid.Column="3" Content="@yahoo.com" FontSize="20" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
+            </Grid>
+
+            <!--  Fila de símbolos de correo: @ . _ - siempre a la vista  -->
+            <Grid Grid.Row="5">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="2*"/>
                     <ColumnDefinition Width="*"/>

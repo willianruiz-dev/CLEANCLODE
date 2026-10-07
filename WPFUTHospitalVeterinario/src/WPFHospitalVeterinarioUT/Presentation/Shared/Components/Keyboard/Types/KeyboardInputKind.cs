@@ -1,18 +1,17 @@
 namespace VirtualKeyboard.Wpf.Types;
 
 /// <summary>
-/// Tipo de entrada esperada por un control. Permite abrir el teclado adecuado
-/// (numérico, correo o alfabético) y descartar los caracteres que no correspondan al campo.
-/// Se asigna en XAML con la propiedad adjunta <c>VKeyboard.InputKind</c>.
+/// Tipo de teclado que se abre para un campo. Se asigna en XAML con la propiedad adjunta
+/// <c>VKeyboard.InputKind</c>. El valor predeterminado mantiene el teclado alfabético de siempre.
 /// </summary>
 public enum KeyboardInputKind
 {
-    /// <summary>Texto libre (comportamiento histórico del teclado alfabético).</summary>
+    /// <summary>Teclado alfabético estándar.</summary>
     Default,
 
-    /// <summary>Solo dígitos: número de documento y número de celular.</summary>
+    /// <summary>Teclado numérico tipo clave (documento y celular).</summary>
     Numeric,
 
-    /// <summary>Correo electrónico: sin espacios y con símbolos de correo a la vista.</summary>
+    /// <summary>Correo electrónico: símbolos de correo a la vista y dominios frecuentes para abreviar.</summary>
     Email
 }

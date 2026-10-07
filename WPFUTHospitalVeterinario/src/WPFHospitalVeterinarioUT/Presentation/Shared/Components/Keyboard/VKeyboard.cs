@@ -24,7 +24,7 @@ public static class VKeyboard
     /// <summary>
     /// Propiedad adjunta con el tipo de entrada del campo. Define el teclado que se abre
     /// y los caracteres aceptados. Se asigna desde XAML, por ejemplo
-    /// <c>keyboard:VKeyboard.InputKind="Numeric"</c>.
+    /// <c>keyboard:VKeyboard.InputKind="Email"</c>.
     /// </summary>
     public static readonly DependencyProperty InputKindProperty = DependencyProperty.RegisterAttached(
         "InputKind",

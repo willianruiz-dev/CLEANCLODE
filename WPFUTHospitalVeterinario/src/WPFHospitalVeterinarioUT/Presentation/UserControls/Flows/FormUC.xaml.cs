@@ -30,6 +30,10 @@ namespace Presentation.UserControls.Flows
         private readonly HospitalUserService _userService = new();
         private CancellationTokenSource? _documentLookupCancellation;
         private bool _isRegistered;
+
+        /// <summary>Indica si los datos personales visibles se autocompletaron con la consulta del documento.</summary>
+        private bool _autoFilledFromLookup;
+
         private string typeDocument = string.Empty;
 
         /// <summary>Evita la reentrada cuando el texto del campo se normaliza en vivo.</summary>
@@ -212,6 +216,8 @@ namespace Presentation.UserControls.Flows
             // Evita consultar la API por cada tecla y descarta respuestas de documentos anteriores.
             if (document.Length < 6)
             {
+                // Al borrar el documento se descartan los datos que se habían autocompletado.
+                ClearAutoFilledPersonalData();
                 UpdateContinueState();
                 return;
             }
@@ -227,7 +233,12 @@ namespace Presentation.UserControls.Flows
                     return;
 
                 if (user == null)
+                {
+                    // El documento consultado no corresponde a un usuario registrado:
+                    // se limpian los datos que hubieran quedado de una consulta anterior.
+                    ClearAutoFilledPersonalData();
                     return;
+                }
 
                 _isRegistered = true;
                 AssignUser(user);
@@ -251,9 +262,28 @@ namespace Presentation.UserControls.Flows
             }
         }
 
+        /// <summary>
+        /// Borra los datos personales que se autocompletaron desde la consulta del documento.
+        /// Solo se limpian los campos que provinieron de la consulta, no lo que el usuario escribió.
+        /// </summary>
+        private void ClearAutoFilledPersonalData()
+        {
+            if (!_autoFilledFromLookup)
+                return;
+
+            _autoFilledFromLookup = false;
+
+            var personalInfo = _ts.customFlows.generaLInformationClient;
+            personalInfo.FirstName = string.Empty;
+            personalInfo.LastName = string.Empty;
+            personalInfo.Mobile = string.Empty;
+            personalInfo.Email = string.Empty;
+        }
+
         private void AssignUser(UserPersonalInfoDto user)
         {
             var personalInfo = _ts.customFlows.generaLInformationClient;
+            _autoFilledFromLookup = true;
             personalInfo.Document = user.Document;
             personalInfo.DocumentType = user.DocumentType;
             personalInfo.FirstName = user.Name;

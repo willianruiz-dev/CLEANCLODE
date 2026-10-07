@@ -61,6 +61,7 @@ class VirtualKeyboardViewModel : INotifyPropertyChanged
         }
     }
     public Command AddCharacter { get; }
+    public Command AddText { get; }
     public Command ChangeCasing { get; }
     public Command RemoveCharacter { get; }
     public Command ChangeKeyboardType { get; }
@@ -100,6 +101,18 @@ class VirtualKeyboardViewModel : INotifyPropertyChanged
                         CaretPosition++;
                     }
                 }
+        });
+        AddText = new Command(a =>
+        {
+            // Inserta texto completo de una sola pulsación (por ejemplo el dominio @gmail.com).
+            if (a is not string text || text.Length == 0) return;
+
+            if (!string.IsNullOrEmpty(SelectedValue))
+                RemoveSubstring(SelectedValue);
+
+            KeyboardText = KeyboardText.Insert(CaretPosition, text);
+            CaretPosition += text.Length;
+            SelectedValue = "";
         });
         ChangeCasing = new Command(a => Uppercase = !Uppercase);
         RemoveCharacter = new Command(a =>
