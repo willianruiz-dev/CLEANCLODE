@@ -233,8 +233,7 @@
                                     FontSize="27"
                                     Foreground="{StaticResource TEXTCOLOR}"
                                     Text="{Binding Document, Mode=TwoWay}"
-                                    TextChanged="TxtDocument_TextChanged"
-                                    keyboard:VKeyboard.InputKind="Numeric" />
+                                    TextChanged="TxtDocument_TextChanged" />
                             </Border>
                         </StackPanel>
                     </StackPanel>
@@ -306,8 +305,7 @@
                                 CaretBrush="Transparent"
                                 Style="{StaticResource TextBoxStyle}"
                                 Text="{Binding Mobile, Mode=TwoWay}"
-                                TextChanged="TxtMobile_TextChanged"
-                                keyboard:VKeyboard.InputKind="Numeric" />
+                                TextChanged="TxtMobile_TextChanged" />
                         </Border>
                     </StackPanel>
                     <StackPanel

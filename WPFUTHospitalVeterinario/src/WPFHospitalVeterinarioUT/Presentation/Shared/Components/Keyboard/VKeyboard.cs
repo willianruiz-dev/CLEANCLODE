@@ -112,7 +112,6 @@ public static class VKeyboard
 
     private static KeyboardType ToKeyboardType(KeyboardInputKind inputKind) => inputKind switch
     {
-        KeyboardInputKind.Numeric => KeyboardType.Numeric,
         KeyboardInputKind.Email => KeyboardType.Email,
         _ => KeyboardType.Alphabet
     };
@@ -123,7 +122,6 @@ public static class VKeyboard
 
         return inputKind switch
         {
-            KeyboardInputKind.Numeric => new string(value.Where(char.IsDigit).ToArray()),
             KeyboardInputKind.Email => new string(value.Where(c => !char.IsWhiteSpace(c)).ToArray()),
             _ => value
         };

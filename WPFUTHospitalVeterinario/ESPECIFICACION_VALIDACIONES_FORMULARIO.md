@@ -13,15 +13,13 @@
 >   y el prefijo `3` se valida al enviar, para no alterar lo que el usuario ve mientras escribe.
 > - El botón Continuar se deshabilita con `IsEnabled = false` sobre el `Image` existente: bloquea mouse
 >   y táctil sin cambiar un solo píxel (no se puso `Opacity` ni estado "gris").
-> - **Teclado numérico:** no se diseñó uno nuevo. `NumericView` reutiliza el teclado tipo clave que la app
->   ya usa en la pantalla de pago (`UI.Components.NumericKeyboard`: 1-9, 0, `X` y borrar) y con el mismo
->   tamaño explícito que allí se usa (`Width="348" Height="404"`). El tamaño debe ir explícito: si se deja
->   automático, el `Viewbox` interno del teclado se encoge hasta la caja que le ofrece la ventana del teclado
->   virtual y queda en miniatura.
-> - **Teclado de correo:** alfabeto estándar + fila con `@`, `.`, `_`, `-` a la vista y fila de dominios
->   frecuentes (`@gmail.com`, `@hotmail.com`, `@outlook.com`, `@yahoo.com`) que insertan el texto completo
->   de una pulsación para abreviar la escritura. El botón `?$#,` abre los símbolos y `abc/123` regresa al
->   teclado de origen.
+> - **Números (documento y celular):** el teclado es exactamente el de siempre, sin cambios. La regla
+>   solo se aplica al texto: el campo descarta lo que no sea dígito y el celular se corta a 10.
+> > - **Teclado de correo (lo único que cambia respecto al teclado de siempre):** mismas cinco filas y
+>   mismo tamaño de tecla; la última fila trae `@`, `.`, `_`, `-` a la vista y los dominios frecuentes
+>   (`@gmail.com`, `@hotmail.com`, `@outlook.com`, `@yahoo.com`) que insertan el texto completo de una
+>   pulsación mediante el comando `AddText`, para abreviar el correo. El botón `?$#,` abre los símbolos
+>   y `abc/123` regresa al teclado de origen.
 > - **Limpieza de campos:** los datos autocompletados desde la API se borran cuando el documento deja de
 >   corresponder a ese usuario (se borra, baja de 6 dígitos o la consulta devuelve que no existe). Solo se
 >   limpian los campos que provinieron de la consulta, no lo que el usuario escribió a mano.

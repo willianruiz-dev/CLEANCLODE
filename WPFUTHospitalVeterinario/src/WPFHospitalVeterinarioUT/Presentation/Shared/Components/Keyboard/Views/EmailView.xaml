@@ -15,10 +15,14 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </UserControl.Resources>
+    <!--
+        Teclado de correo: mismas cinco filas y mismo tamaño de tecla que el teclado de siempre.
+        Se diferencia únicamente en la última fila, que trae los símbolos propios del correo
+        (@ . _ -) y los dominios más usados para abreviar la escritura.
+    -->
     <Grid>
         <Grid Margin="10">
             <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="*"/>
@@ -50,6 +54,7 @@
                 <Button Grid.Column="8" Content="9" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddCharacter}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
                 <Button Grid.Column="9" Content="0" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddCharacter}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
             </Grid>
+
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -112,7 +117,8 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="1.9*"/>
+                    <ColumnDefinition Width="1.2*"/>
+                    <ColumnDefinition Width="0.8*"/>
                 </Grid.ColumnDefinitions>
                 <ContentControl Grid.Column="0" Content="{StaticResource CasingButton}"/>
                 <Button Grid.Column="1" Content="z" Typography.Capitals="{Binding Uppercase, Converter={StaticResource UppercaseConverter}}" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddCharacter}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
@@ -123,38 +129,28 @@
                 <Button Grid.Column="6" Content="n" Typography.Capitals="{Binding Uppercase, Converter={StaticResource UppercaseConverter}}" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddCharacter}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
                 <Button Grid.Column="7" Content="m" Typography.Capitals="{Binding Uppercase, Converter={StaticResource UppercaseConverter}}" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddCharacter}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
                 <ContentControl Grid.Column="8" Content="{StaticResource BackspaceButton}" />
+                <Button Grid.Column="9" Content="?$#," Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding ChangeKeyboardType}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
             </Grid>
 
-            <!--  Dominios frecuentes: abrevian la escritura del correo  -->
             <Grid Grid.Row="4">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Content="@gmail.com" FontSize="20" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
-                <Button Grid.Column="1" Content="@hotmail.com" FontSize="20" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
-                <Button Grid.Column="2" Content="@outlook.com" FontSize="20" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
-                <Button Grid.Column="3" Content="@yahoo.com" FontSize="20" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
-            </Grid>
-
-            <!--  Fila de símbolos de correo: @ . _ - siempre a la vista  -->
-            <Grid Grid.Row="5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="2*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="0.8*"/>
+                    <ColumnDefinition Width="0.8*"/>
+                    <ColumnDefinition Width="0.8*"/>
+                    <ColumnDefinition Width="0.8*"/>
+                    <ColumnDefinition Width="1.7*"/>
+                    <ColumnDefinition Width="1.7*"/>
+                    <ColumnDefinition Width="1.7*"/>
+                    <ColumnDefinition Width="1.7*"/>
                 </Grid.ColumnDefinitions>
                 <Button Grid.Column="0" Content="@" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddCharacter}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
                 <Button Grid.Column="1" Content="." Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddCharacter}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
                 <Button Grid.Column="2" Content="_" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddCharacter}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
                 <Button Grid.Column="3" Content="-" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddCharacter}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
-                <Button Grid.Column="4" Content="?$#," Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding ChangeKeyboardType}"/>
-                <ContentControl Grid.Column="5" Content="{StaticResource BackspaceEnter}" />
+                <Button Grid.Column="4" Content="@gmail.com" FontSize="16" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
+                <Button Grid.Column="5" Content="@hotmail.com" FontSize="16" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
+                <Button Grid.Column="6" Content="@outlook.com" FontSize="16" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
+                <Button Grid.Column="7" Content="@yahoo.com" FontSize="16" Style="{DynamicResource KeyboardButtonStyle}" Command="{Binding AddText}" CommandParameter="{Binding RelativeSource={RelativeSource Mode=Self}, Path=Content}"/>
             </Grid>
         </Grid>
     </Grid>
