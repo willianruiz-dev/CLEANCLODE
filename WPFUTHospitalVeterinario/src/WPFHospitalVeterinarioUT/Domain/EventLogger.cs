@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Globalization;
 
 namespace Domain
 {
@@ -16,6 +17,9 @@ namespace Domain
             [CallerMemberName] string method = "", [CallerFilePath] string callerPath = "")
         {
             var className = Path.GetFileNameWithoutExtension(callerPath);
+            if (className.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase))
+                className = Path.GetFileNameWithoutExtension(className);
+
             var timestamp = DateTime.Now;
             
             int idTransaction = 0;
@@ -28,7 +32,7 @@ namespace Domain
             var _event = new LogEvent
             {
                 Date = timestamp,
-                Time = timestamp.ToString("hh:mm:ss.fff tt"),
+                Time = timestamp.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture),
                 IdTransaction = idTransaction,
                 Type = type.ToString(),
                 Class = className,
@@ -61,9 +65,10 @@ namespace Domain
             }
             
             string folder;
-            if (type.ToString().StartsWith("P"))
+            if (type.ToString().StartsWith("P", StringComparison.Ordinal))
                 folder = "Log_peripherals";
-            else if (type.ToString().Contains("Integration"))
+            else if (type == EventType.Integration ||
+                     callerPath.Contains("ApiService", StringComparison.OrdinalIgnoreCase))
                 folder = "Log_integration";
             else
                 folder = "Log_application";

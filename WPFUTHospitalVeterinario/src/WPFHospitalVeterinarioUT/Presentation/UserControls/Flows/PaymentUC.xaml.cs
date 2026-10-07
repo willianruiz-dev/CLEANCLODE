@@ -586,7 +586,6 @@ namespace Presentation.UserControls.Flows
         {
             try
             {
-                EventLogger.SaveLog(EventType.Info, $"Enviando detalle a la api: Op: {op}, Denom: ${denom.ToString("N0")}, Cantidad: {quantity}");
                 ApiDashboard.CreateTransactionDetail(op, (int)denom, quantity);
 
             }

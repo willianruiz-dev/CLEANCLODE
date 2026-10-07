@@ -176,6 +176,7 @@ namespace WPFHospitalVeterinarioUT.ApiService
             var transactionToUpdate = ts.transactionProcess.ApiDto;
 
             transactionToUpdate.IdStateTransaction = (int)ts.transactionProcess.EstadoTransaccion;
+            transactionToUpdate.StateTransaction = ts.transactionProcess.EstadoTransaccion.ToString();
             transactionToUpdate.Description = ts.paymentProcess.Descripcion;
             transactionToUpdate.IncomeAmount = (double)ts.paymentProcess.TotalIngresado;
             transactionToUpdate.ReturnAmount = (double)ts.paymentProcess.TotalDevuelta;
@@ -237,6 +238,7 @@ namespace WPFHospitalVeterinarioUT.ApiService
                 var content = new StringContent(payload, Encoding.UTF8, "Application/json");
                 var url = AppConfig.Get("TransactionDetails");
 
+                EventLogger.SaveLog(EventType.Info, "Petición: Creación de detalle de transacción Dashboard", detail);
                 var response = await _client.PostAsync(url, content);
 
                 var result = await response.Content.ReadAsStringAsync();
@@ -256,6 +258,7 @@ namespace WPFHospitalVeterinarioUT.ApiService
                 if (requestresponse.statusCode == 200)
                 {
                     var listTransactionsCreated = requestresponse.response;
+                    EventLogger.SaveLog(EventType.Info, "Respuesta: Creación de detalle de transacción Dashboard", requestresponse);
                     return listTransactionsCreated;
                 }
 
