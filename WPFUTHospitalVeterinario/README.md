@@ -2,8 +2,6 @@
 
 Aplicación de **kiosco** en WPF (.NET 6) para el pago de facturas y recaudos del Hospital Veterinario de la Universidad del Tolima. El usuario ingresa su documento, sus datos personales y el valor a pagar; la máquina **recibe dinero en efectivo, entrega la devuelta e imprime la tirilla**, y todo el proceso queda registrado en dos sistemas por API y **grabado en video**.
 
-> **Documentación vigente.** Reemplaza al README anterior, que describía componentes que ya no existen en el proyecto (base de datos local SQLite, .NET Framework 4.8, un único `HospitalApiService` y notificaciones de errores por correo con `EmailSender`, **retiradas del proyecto hace tiempo**). Reescrita el **2026-10-07** contra el código actual.
-
 ---
 
 ## Tabla de contenido
@@ -129,7 +127,7 @@ WPFUTHospitalVeterinario/
 ├── README.md                        ← este documento
 ├── IMPRESION_TIRILLA.md             ← detalle de la impresión (W-80 y PDF)
 ├── ESPECIFICACION_VALIDACIONES_FORMULARIO.md
-├── REVISION_TECNICA.md              ← revisión técnica (eliminación de SQLite, colas, logs)
+├── REVISION_TECNICA.md              ← revisión técnica del proyecto (colas, logs, conectividad)
 ├── resources/FLUJO_UNIVERDIDAD_DEL_TOLIMA_v2.pdf
 └── src/WPFHospitalVeterinarioUT/
     ├── App.xaml.cs                  ← instancia única, teclado virtual, error fatal
@@ -148,12 +146,12 @@ WPFUTHospitalVeterinario/
     │   │   ├── Dispenser/{Dispenser,CDMS_Handler,CDMS_Api}.cs ← Hantle CDMS (billetes)
     │   │   ├── Printer/PrintService.cs       ← tirilla W-80 / PDF
     │   │   ├── Recorder/{RecordingService,VideoRecorder}.cs   ← video
-    │   │   └── Scanner/ScannerController.cs  ← (sin uso actual)
+    │   │   └── Scanner/ScannerController.cs  ← sin uso en el flujo
     │   ├── Validation/PersonalInformationValidator.cs
     │   ├── UIServices/
     │   │   ├── Navigator.cs · Transaction.cs
     │   │   ├── TimerService.cs · TimerGeneric.cs
-    │   │   └── ImageSlider.cs                ← (sin uso actual)
+    │   │   └── ImageSlider.cs                ← sin uso en el flujo
     │   ├── Enumerables/            ← StateTransaction, TypePayment, TypeTransaction, TypeOperation
     │   ├── EventLogger.cs          ← logs en 3 carpetas
     │   └── AppConfig.cs · Variables/Messages.cs
@@ -294,7 +292,7 @@ Pantalla `FinishUC` (temporizador **01:30**, arranca **después** de imprimir):
 
 ### 4.7 Temporizadores
 
-Diseño actual: **el temporizador vive en la clase base `AppUserControl`** (servicio `TimerService`), así que cada pantalla solo declara su duración y a dónde volver; ya no hay código de temporizador repetido en cada control.
+Diseño actual: **el temporizador vive en la clase base `AppUserControl`** (servicio `TimerService`), así que ninguna pantalla repite la lógica del temporizador: solo declara su duración y a dónde volver.
 
 | Pantalla | Duración | Se inicia | Al agotarse |
 |---|---|---|---|
@@ -390,7 +388,7 @@ Todas las llamadas quedan en `Log_integration`. Si la sincronización con la UT 
 | **Dispensador Hantle CDMS** | `Dispenser.cs` + `CDMS_Handler` / `CDMS_Api` | `dispenserPort` (COM1), baúles en `dispenserDenominations` (`10000;2000`) | Entrega los **billetes** de la devuelta. Expone `GetLoadMessage()` (estado de carga, se valida al arrancar), `DispenseAmount()`, contadores `DispensedData` / `RejectData` y la bandera `MustReinitialize` tras un error crítico. |
 | **Impresora W-80** | `PrintService.cs` | USB (`Msprintsdk.dll`, `SetUsbportauto`) | Imprime la tirilla. En Debug (sin periféricos) genera un PDF con las mismas medidas para poder probar. |
 | **Cámara** | `VideoRecorder.cs` | índice 0 (DirectShow) | Evidencia en video del proceso de pago. |
-| **Escáner** | `ScannerController.cs` | `scannerPort` | **Sin uso actual**: el código existe pero no está conectado al flujo (además lee la clave `ScannerPort` con otra capitalización que la del `App.config`). |
+| **Escáner** | `ScannerController.cs` | `scannerPort` | Código presente en el proyecto, **sin uso en el flujo actual**: no está conectado a la aplicación. |
 
 > **Archivos delicados**: `ArduinoController.cs`, `Dispenser.cs`, `CDMS_*`, `MeiAcceptor.cs` y `PrintService.cs` no deben modificarse sin autorización explícita; son la capa que habla con el hardware real.
 
@@ -449,7 +447,7 @@ Líneas clave para diagnosticar:
 | `acceptorDevice` | `MEI` | Aceptador en uso |
 | `dispenserDenominations` | `10000;2000` | Baúles del dispensador CDMS |
 | `imgVoucher` | `Assets/Images/Voucher.png` | Imagen que acompaña la tirilla |
-| `scannerPort`, `publishDir`, `Tonnage` | — | **Sin uso actual** (el escáner y el slider de imágenes no están conectados al flujo) |
+| `scannerPort`, `publishDir`, `Tonnage` | — | Presentes en el archivo, sin uso en el flujo actual |
 
 ---
 
@@ -480,7 +478,7 @@ Líneas clave para diagnosticar:
 
 ## 12. Notas de diseño y mantenimiento
 
-- **Sin base de datos local**: la aplicación eliminó SQLite/Entity Framework; todo pasa por las APIs (`REVISION_TECNICA.md` documenta esa revisión y sus pruebas).
+- **Persistencia por API**: los usuarios, las transacciones y las calificaciones se guardan en las APIs (Dashboard y UT); la aplicación no requiere base de datos local.
 - **El Dashboard y la UT son sistemas distintos**: el Dashboard es el panel del hospital (transacciones, detalles, calificación); la UT es la base de la universidad (usuario y transacción). Un fallo de la UT **no** revierte el cobro, pero queda registrado en el log.
 - **El temporizador es de la clase base**: cada pantalla declara solo duración y destino. No reintroducir temporizadores por pantalla.
 - **El video no se fuerza a 30 fps**: se graba a la velocidad real de la cámara (~5 fps) y luego se corrige la duración del archivo. Así el video no se oscurece.
@@ -488,7 +486,6 @@ Líneas clave para diagnosticar:
 - **Formulario**: se consulta la UT desde los 4 dígitos con 400 ms de espera; el autocompletado solo se limpia si venía de la consulta (nunca lo que el usuario escribió).
 - **Verificación del guardado**: tras guardar un usuario se reconsulta; así el log distingue "la API respondió OK" de "quedó guardado".
 - **Cola de escrituras a la API**: un solo consumidor y reintentos con espera creciente para fallos transitorios de red.
-- **Sin notificación por correo**: el envío automático de correos **ya no forma parte de la aplicación** (se retiró hace tiempo); los errores críticos y las advertencias quedan únicamente en los logs. No hay claves de correo en `App.config` ni carpetas de log de correo.
 
 ---
 
@@ -506,3 +503,5 @@ Líneas clave para diagnosticar:
 
 **Proyecto**: Hospital Veterinario UT — Universidad del Tolima
 **Desarrollador**: William Ruiz (E-City) — wruiz@e-city.co
+
+*Documentación actualizada: 2026-10-07.*
