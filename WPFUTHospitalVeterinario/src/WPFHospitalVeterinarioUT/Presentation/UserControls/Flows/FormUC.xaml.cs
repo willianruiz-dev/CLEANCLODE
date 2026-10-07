@@ -2,6 +2,8 @@ using Domain;
 using Domain.Enumerables;
 using Domain.UIServices;
 using Domain.Validation;
+using ApiService.Models;
+using WPFHospitalVeterinarioUT.ApiService;
 using Presentation.UserControls.Bases;
 using System.Windows;
 using System.Windows.Controls;
@@ -20,7 +22,10 @@ namespace Presentation.UserControls.Flows
     {
         
         public Transaction _ts = Transaction.Instance;
-        string typeDocument;
+        private readonly HospitalUserService _userService = new();
+        private CancellationTokenSource? _documentLookupCancellation;
+        private bool _isRegistered;
+        private string typeDocument = string.Empty;
         private const string STR_TIMER = "03:00";
 
         private TimerGeneric? _timer;
@@ -40,6 +45,8 @@ namespace Presentation.UserControls.Flows
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
            
+            _documentLookupCancellation?.Cancel();
+            _documentLookupCancellation?.Dispose();
             StopTimer();
         }
 
@@ -55,12 +62,80 @@ namespace Presentation.UserControls.Flows
             }
         }
 
-        private void TxtDocument_TextChanged(object sender, TextChangedEventArgs e)
+        private async void TxtDocument_TextChanged(object sender, TextChangedEventArgs e)
         {
-            // El documento se conserva mediante el binding; no se consulta almacenamiento local.
+            if (sender is not TextBox textBox)
+                return;
+
+            var document = new string(textBox.Text.Where(char.IsDigit).ToArray());
+            _isRegistered = false;
+
+            _documentLookupCancellation?.Cancel();
+            _documentLookupCancellation?.Dispose();
+            _documentLookupCancellation = new CancellationTokenSource();
+            var cancellationToken = _documentLookupCancellation.Token;
+
+            // Evita consultar la API por cada tecla y descarta respuestas de documentos anteriores.
+            if (document.Length < 6)
+                return;
+
+            try
+            {
+                await Task.Delay(400, cancellationToken);
+                Cursor = Cursors.Wait;
+                var user = await _userService.GetByDocumentAsync(document, cancellationToken);
+
+                if (cancellationToken.IsCancellationRequested ||
+                    !string.Equals(textBox.Text, document, StringComparison.Ordinal))
+                    return;
+
+                if (user == null)
+                    return;
+
+                _isRegistered = true;
+                AssignUser(user);
+                SelectDocumentType(user.DocumentType);
+            }
+            catch (OperationCanceledException)
+            {
+                // Se escribió otro documento antes de finalizar la consulta anterior.
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Error,
+                    "No fue posible consultar la información personal mediante la API.", ex);
+            }
+            finally
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                    Cursor = Cursors.Arrow;
+            }
         }
 
-        private void BtnForm_MouseDown(object sender, MouseButtonEventArgs e)
+        private void AssignUser(UserPersonalInfoDto user)
+        {
+            var personalInfo = _ts.customFlows.generaLInformationClient;
+            personalInfo.Document = user.Document;
+            personalInfo.DocumentType = user.DocumentType;
+            personalInfo.FirstName = user.Name;
+            personalInfo.LastName = user.LastName;
+            personalInfo.Mobile = user.Mobile;
+            personalInfo.Email = user.Email;
+        }
+
+        private void SelectDocumentType(string documentType)
+        {
+            foreach (var item in TypeDocument.Items.OfType<ComboBoxItem>())
+            {
+                if (string.Equals(item.Content?.ToString(), documentType, StringComparison.OrdinalIgnoreCase))
+                {
+                    TypeDocument.SelectedItem = item;
+                    return;
+                }
+            }
+        }
+
+        private async void BtnForm_MouseDown(object sender, MouseButtonEventArgs e)
         {
             var personalInfo = _ts.customFlows.generaLInformationClient;
             var validationError = PersonalInformationValidator.GetValidationError(
@@ -78,6 +153,27 @@ namespace Presentation.UserControls.Flows
             }
 
             _ts.paymentProcess.Documento = personalInfo.Document;
+
+            if (!_isRegistered)
+            {
+                var saved = await _userService.CreateOrUpdateAsync(new UserPersonalInfoDto
+                {
+                    Document = personalInfo.Document,
+                    DocumentType = personalInfo.DocumentType,
+                    Name = personalInfo.FirstName,
+                    LastName = personalInfo.LastName,
+                    Mobile = personalInfo.Mobile,
+                    Email = personalInfo.Email
+                });
+
+                if (!saved)
+                {
+                    _nav.ShowModal(
+                        "No fue posible almacenar su información personal para futuras ocasiones. Sin embargo, podrá continuar con la transacción iniciada.",
+                        new InfoModal());
+                }
+            }
+
             GoTo(new ReferenceToPayUC());
         }
 
