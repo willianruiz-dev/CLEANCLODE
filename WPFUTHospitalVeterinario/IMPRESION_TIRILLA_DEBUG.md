@@ -34,7 +34,8 @@ el correcto.
   siempre a 96 ppp y la resolución real (288 ppp) se marca al final, solo como dato de la imagen.
 - **Contenido**: la imagen se coloca con `q W 0 0 H 5mm 5mm cm /Im0 Do Q`, es decir con su tamaño real
   y desplazada a la esquina (el origen del PDF está abajo a la izquierda).
-- **Imágenes de la tirilla**: nunca más anchas que la tirilla, conservando proporción. La cabecera
+- **Imágenes de la tirilla** (solo en el PDF: la w80 las sigue dibujando igual que siempre): nunca
+  más anchas que la tirilla, conservando proporción. La cabecera
   (`Voucher.png`) mide 828 x 242 px = 219 mm a 96 ppp, más del doble del ancho de la tirilla: ajustada
   ocupa 80 x 23 mm y su alto encaja justo antes de la primera línea de texto (`y = 105`).
 - **Si la tirilla fuera más alta que la hoja**, la hoja crece para no cortarla.
@@ -96,6 +97,27 @@ Regla que hay que respetar:
 
 Lo mismo vale para `DrawImage(imagen, x, y)` (el QR): GDI+ usa la resolución del lienzo contra la de la
 imagen; con el lienzo a 96 ppp la dibuja 1:1 con el diseño.
+
+### Qué NO cambia en Release
+
+El camino de la w80 es el mismo de siempre. `Start()` en Release compila exactamente:
+
+```csharp
+_document.Print();                       // PrintDocument -> w80
+var wasSucess = MonitorPrintJobs();
+if (!wasSucess) CleanPrintQueue();
+recentImpressionSuccess = wasSucess;
+```
+
+Todo lo del PDF vive dentro de `#if NO_PERIPHERALS`, así que **en Release ni se compila** (`PrintPdf`,
+`BuildReceiptPdf`, `EncodeJpeg`, `CreateReceiptCanvas` y sus constantes). El dibujo de la tirilla es un
+único método (`DrawReceipt`) compartido por los dos caminos, y la única diferencia entre ellos es que
+el lienzo del PDF pide las imágenes ajustadas al ancho de la tirilla
+(`DrawReceipt(graphics, fitImagesToReceiptWidth: true)`); la impresora lo llama **sin ese ajuste**, con
+las imágenes a tamaño natural, igual que antes.
+
+La única línea que se agregó al camino de Release es un log informativo
+(`Imprimiendo la tirilla con 'w80'.`); no cambia qué se imprime ni cómo.
 
 ### Líneas que no caben
 

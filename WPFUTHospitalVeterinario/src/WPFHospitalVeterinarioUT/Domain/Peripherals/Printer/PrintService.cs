@@ -203,8 +203,19 @@ namespace Domain.Peripherals
             }
         }
 
-        /// <summary>Dibuja la tirilla con las coordenadas originales del diseño.</summary>
-        private static void DrawReceipt(Graphics graphics)
+        /// <summary>
+        /// Dibuja la tirilla tal como la imprime la w80: las imágenes van a su tamaño natural, como
+        /// siempre. Este es el dibujo que usan tanto la impresora como el lienzo del PDF.
+        /// </summary>
+        private static void DrawReceipt(Graphics graphics) => DrawReceipt(graphics, false);
+
+        /// <summary>
+        /// Dibuja la tirilla con las coordenadas originales del diseño.
+        /// <paramref name="fitImagesToReceiptWidth"/> solo lo usa el lienzo del PDF (compilación
+        /// <c>NO_PERIPHERALS</c>) para que la cabecera no se salga de los 80 mm del lienzo. En la
+        /// impresora queda en <c>false</c>: la tirilla física se dibuja exactamente como siempre.
+        /// </summary>
+        private static void DrawReceipt(Graphics graphics, bool fitImagesToReceiptWidth)
         {
             var printData = _printData;
             if (printData == null) return;
@@ -219,9 +230,17 @@ namespace Domain.Peripherals
                 }
                 else if (!string.IsNullOrEmpty(printObj.Image))
                 {
-                    // Nunca más ancha que el ancho de la tirilla: la cabecera ocupa ese ancho.
-                    int availableWidth = (int)Math.Max(0, graphics.VisibleClipBounds.Width - printObj.X);
                     using var image = Image.FromFile(printObj.Image);
+
+                    if (!fitImagesToReceiptWidth)
+                    {
+                        // Camino de la w80: tamaño natural, igual que siempre.
+                        _graphics.DrawImage(image, printObj.X, printObj.Y);
+                        continue;
+                    }
+
+                    // Camino del PDF: nunca más ancha que el ancho de la tirilla.
+                    int availableWidth = (int)Math.Max(0, graphics.VisibleClipBounds.Width - printObj.X);
                     var size = FitToReceiptWidth(image.Width, image.Height, availableWidth);
                     if (size.IsEmpty) continue;
 
@@ -263,7 +282,7 @@ namespace Domain.Peripherals
                 canvasGraphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
                 canvasGraphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 canvasGraphics.ScaleTransform((float)ReceiptRenderScale, (float)ReceiptRenderScale);
-                DrawReceipt(canvasGraphics);
+                DrawReceipt(canvasGraphics, fitImagesToReceiptWidth: true);
             }
 
             // Ya dibujado, se marca la resolución real de la imagen (96 ppp x 3). Es solo el dato
