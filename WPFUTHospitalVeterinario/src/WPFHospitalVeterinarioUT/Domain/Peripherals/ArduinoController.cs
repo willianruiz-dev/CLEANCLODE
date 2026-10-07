@@ -1,4 +1,4 @@
-// ────────────────────────────────────────────────────────────────────────────────
+﻿// ────────────────────────────────────────────────────────────────────────────────
 // Reemplazo del controlador de periféricos. Versión de referencia: proyecto
 // WPF_LA_OFRENDA_V1 (Arduino que opera de forma estable en producción).
 // Adaptaciones respecto a esa versión, únicamente de integración:
