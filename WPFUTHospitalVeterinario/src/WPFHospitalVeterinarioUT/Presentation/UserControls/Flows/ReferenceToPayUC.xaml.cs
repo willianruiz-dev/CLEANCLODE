@@ -201,51 +201,20 @@ namespace Presentation.UserControls.Flows
         {
             try
             {
-                // Inicializar el VideoRecorder si no existe
-                if (_ts.videoRecorder == null)
-                {
-                    _ts.videoRecorder = new VideoRecorder(_ts);
-                }
-
-                // Iniciar grabación en hilo separado para no bloquear la UI
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        bool result = await _ts.videoRecorder.StartAsync();
-                        if (result)
-                        {
-                            EventLogger.SaveLog(EventType.Info, "Grabación iniciada exitosamente desde ReferenceToPayUC");
-                        }
-                        else
-                        {
-                            EventLogger.SaveLog(EventType.Warning, "No se pudo iniciar la grabación desde ReferenceToPayUC");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        EventLogger.SaveLog(EventType.Error, $"Error al iniciar grabación desde ReferenceToPayUC: {ex.Message}", ex);
-                    }
-                });
+                _ts.videoRecorder ??= new VideoRecorder(_ts);
+                var started = await _ts.videoRecorder.StartAsync();
+                EventLogger.SaveLog(
+                    started ? EventType.Info : EventType.Warning,
+                    started
+                        ? "Grabación iniciada antes de crear la transacción."
+                        : "No se pudo iniciar la grabación; la transacción continuará sin video.");
             }
             catch (Exception ex)
             {
-                EventLogger.SaveLog(EventType.Error, $"Error al inicializar VideoRecorder desde ReferenceToPayUC: {ex.Message}", ex);
+                EventLogger.SaveLog(EventType.Error, "Error inicializando la grabación de video.", ex);
             }
         }
 
-        private string FormatMoney(string valor)
-        {
-            // Limpiar XDR y cualquier caracter no numerico
-            string limpio = new string(valor.Where(char.IsDigit).ToArray());
-            if (string.IsNullOrEmpty(limpio)) limpio = "0";
-            
-            // Usar formato manual con "$" en lugar de {0:C0} que usa la moneda de Windows (XDR)
-            decimal valorNumerico = decimal.Parse(limpio);
-            return "$" + valorNumerico.ToString("N0");
-        }
-        #endregion
-        #region Timer
         public void GoTimer()
         {
             try

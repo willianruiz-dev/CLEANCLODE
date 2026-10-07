@@ -1,406 +1,315 @@
-using Domain;
 using Domain.UIServices;
 using OpenCvSharp;
+using System.Diagnostics;
 using System.IO;
 
 namespace Domain.Peripherals.Recorder
 {
     /// <summary>
-    /// Grabador de video para transacciones del Hospital Veterinario UT
-    /// Graba videos localmente con timestamp automático
+    /// Graba el video de una transacción y administra de forma coordinada
+    /// la cámara, el escritor y el hilo de captura.
     /// </summary>
-    public class VideoRecorder : IDisposable
+    public sealed class VideoRecorder : IDisposable
     {
-        #region Campos privados
-        private bool _isRecording;
-        private bool _lastOperationFailed = false;
-        private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
-        private DateTime _startTime;
+        private const int MaxConsecutiveReadErrors = 10;
+        private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
 
-        // Variables para grabación
+        private readonly Transaction _transaction;
+        private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
+
         private VideoCapture? _capture;
         private VideoWriter? _videoWriter;
+        private CancellationTokenSource? _recordingCancellation;
         private Task? _recordingTask;
         private string? _currentVideoPath;
-        private int _frameCount = 0;
+        private DateTime _startTime;
+        private volatile bool _isRecording;
+        private bool _disposed;
+        private int _frameCount;
 
-        // Referencia a la transacción para obtener el ID al finalizar
-        private readonly Transaction _transaction;
-        #endregion
-
-        #region Constructor
         public VideoRecorder(Transaction transaction)
         {
-            _transaction = transaction;
+            _transaction = transaction ?? throw new ArgumentNullException(nameof(transaction));
         }
-        #endregion
 
-        #region Métodos públicos
-        /// <summary>
-        /// Inicia la grabación de video
-        /// </summary>
-        /// <param name="source">Índice de la cámara (0 por defecto)</param>
-        /// <returns>True si la grabación se inició correctamente</returns>
+        public bool IsRecording => _isRecording;
+        public bool IsCameraAvailable { get; private set; } = true;
+
         public async Task<bool> StartAsync(int source = 0)
         {
-            if (_isRecording || _lastOperationFailed)
-            {
-                EventLogger.SaveLog(EventType.Warning, $"[VideoRecorder] StartAsync bloqueado - _isRecording={_isRecording}, _lastOperationFailed={_lastOperationFailed}");
-                return _isRecording;
-            }
-
-            await _semaphore.WaitAsync();
-
+            await _lifecycleGate.WaitAsync().ConfigureAwait(false);
             try
             {
+                ThrowIfDisposed();
                 if (_isRecording)
-                {
                     return true;
-                }
 
-                _startTime = DateTime.Now;
+                CleanupResources();
+                PrepareOutputPath();
 
-
-                var timestamp = _startTime.ToString("HHmmss");
-                var year = _startTime.Year.ToString();
-                var month = _startTime.Month.ToString("00");
-                var day = _startTime.Day.ToString("00");
-                var hour = _startTime.Hour.ToString("00");
-
-                var filename = $"Video_{timestamp}.mp4";
-                _currentVideoPath = Path.Combine("Videos", year, month, day, hour, filename);
-
-
-
-                var directory = Path.GetDirectoryName(_currentVideoPath);
-                Directory.CreateDirectory(directory);
-
-                // Iniciar grabación
-                bool result = await StartRecordingAsync(source);
-
-                if (result)
+                var initialized = await Task.Run(() => InitializeCapture(source)).ConfigureAwait(false);
+                if (!initialized)
                 {
-                    _lastOperationFailed = false;
-                    return true;
-                }
-                else
-                {
-                    _lastOperationFailed = true;
+                    IsCameraAvailable = false;
+                    CleanupResources();
                     return false;
                 }
+
+                IsCameraAvailable = true;
+                _frameCount = 0;
+                _recordingCancellation = new CancellationTokenSource();
+                _isRecording = true;
+                _recordingTask = Task.Run(() => RecordingLoop(_recordingCancellation.Token));
+
+                EventLogger.SaveLog(EventType.Info,
+                    $"Grabación iniciada con cámara {source}. Archivo: {_currentVideoPath}");
+                return true;
             }
             catch (Exception ex)
             {
-                EventLogger.SaveLog(EventType.Error, $"[VideoRecorder] Error en StartAsync: {ex.Message}", ex);
-                _lastOperationFailed = true;
+                _isRecording = false;
+                IsCameraAvailable = false;
+                CleanupResources();
+                EventLogger.SaveLog(EventType.Error, "No fue posible iniciar la grabación de video.", ex);
                 return false;
             }
             finally
             {
-                _semaphore.Release();
+                _lifecycleGate.Release();
             }
         }
 
-        /// <summary>
-        /// Detiene la grabación de video
-        /// </summary>
-        /// <param name="source">Índice de la cámara (no utilizado, mantenido por compatibilidad)</param>
-        /// <returns>True si la grabación se detuvo correctamente</returns>
         public async Task<bool> StopAsync(int source = 0)
         {
-            if (!_isRecording)
-            {
-                return true;
-            }
-
-            await _semaphore.WaitAsync();
-
+            await _lifecycleGate.WaitAsync().ConfigureAwait(false);
             try
             {
-                if (!_isRecording)
-                {
+                if (_recordingTask == null && _capture == null && _videoWriter == null)
                     return true;
-                }
 
                 _isRecording = false;
-                bool result = await StopRecordingAsync();
+                _recordingCancellation?.Cancel();
 
-                return result;
+                if (_recordingTask != null)
+                {
+                    var completedTask = await Task.WhenAny(
+                        _recordingTask,
+                        Task.Delay(StopTimeout)).ConfigureAwait(false);
+
+                    if (completedTask != _recordingTask)
+                    {
+                        EventLogger.SaveLog(EventType.Error,
+                            "La captura de video no finalizó dentro del tiempo máximo; se conservaron los recursos para evitar acceso nativo concurrente.");
+                        return false;
+                    }
+
+                    // Propaga y registra cualquier error inesperado del worker.
+                    await _recordingTask.ConfigureAwait(false);
+                }
+
+                CleanupResources();
+                var finalPath = FinalizeVideoName();
+                var saved = !string.IsNullOrWhiteSpace(finalPath) && File.Exists(finalPath);
+
+                EventLogger.SaveLog(
+                    saved ? EventType.Info : EventType.Warning,
+                    saved
+                        ? $"Grabación finalizada. Frames: {_frameCount}. Archivo: {finalPath}"
+                        : "La grabación finalizó sin generar un archivo de video.");
+
+                return saved;
             }
             catch (Exception ex)
             {
-                _isRecording = false;
+                EventLogger.SaveLog(EventType.Error, "No fue posible detener la grabación de video.", ex);
                 return false;
             }
             finally
             {
-                _semaphore.Release();
+                _lifecycleGate.Release();
             }
         }
-        #endregion
 
-        #region Métodos privados
-        private async Task<bool> StartRecordingAsync(int source)
+        private void PrepareOutputPath()
         {
-            try
+            _startTime = DateTime.Now;
+            var directory = Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory,
+                "Videos",
+                _startTime.ToString("yyyy"),
+                _startTime.ToString("MM"),
+                _startTime.ToString("dd"),
+                _startTime.ToString("HH"));
+
+            Directory.CreateDirectory(directory);
+            _currentVideoPath = Path.Combine(directory, $"Video_{_startTime:HHmmss_fff}.mp4");
+        }
+
+        private bool InitializeCapture(int source)
+        {
+            _capture = new VideoCapture(source);
+            if (!_capture.IsOpened())
             {
-                EventLogger.SaveLog(EventType.Info, $"[VideoRecorder] Iniciando grabación con cámara {source}");
-
-                CleanupResources();
-
-
-                _capture = new VideoCapture(source);
-                if (!_capture.IsOpened())
-                {
-                    EventLogger.SaveLog(EventType.Error, $"[VideoRecorder] No se pudo abrir la cámara {source}. Verificar que la cámara esté conectada y no esté en uso por otra aplicación.");
-                    throw new Exception($"No se pudo abrir la cámara {source}");
-                }
-                EventLogger.SaveLog(EventType.Info, $"[VideoRecorder] Cámara {source} abierta correctamente");
-
-                int width = (int)_capture.Get(VideoCaptureProperties.FrameWidth);
-                int height = (int)_capture.Get(VideoCaptureProperties.FrameHeight);
-                double fps = _capture.Get(VideoCaptureProperties.Fps);
-
-
-                if (width <= 0) width = 640;
-                if (height <= 0) height = 480;
-                if (fps <= 0) fps = 30;
-
-
-                EventLogger.SaveLog(EventType.Info, $"[VideoRecorder] Configuración de cámara: {width}x{height} @ {fps}fps");
-
-                _videoWriter = InitializeVideoWriter(width, height, fps);
-                if (_videoWriter == null)
-                {
-                    EventLogger.SaveLog(EventType.Error, "[VideoRecorder] No se pudo inicializar el VideoWriter. Ningún codec disponible.");
-                    throw new Exception("No se pudo inicializar el VideoWriter");
-                }
-                EventLogger.SaveLog(EventType.Info, $"[VideoRecorder] VideoWriter inicializado. Guardando en: {_currentVideoPath}");
-
-                _isRecording = true;
-                _frameCount = 0;
-
-
-                _recordingTask = Task.Run(RecordingLoop);
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error, $"[VideoRecorder] Error en StartRecordingAsync: {ex.Message}", ex);
-                CleanupResources();
+                EventLogger.SaveLog(EventType.Error,
+                    $"No se pudo abrir la cámara {source}; puede estar desconectada o en uso.");
                 return false;
             }
+
+            var width = Math.Max(640, (int)_capture.Get(VideoCaptureProperties.FrameWidth));
+            var height = Math.Max(480, (int)_capture.Get(VideoCaptureProperties.FrameHeight));
+            var fps = _capture.Get(VideoCaptureProperties.Fps);
+            if (fps is <= 0 or > 120)
+                fps = 30;
+
+            _videoWriter = InitializeVideoWriter(width, height, fps);
+            return _videoWriter != null;
         }
 
         private VideoWriter? InitializeVideoWriter(int width, int height, double fps)
         {
             var codecs = new[]
             {
-                VideoWriter.FourCC('X', 'V', 'I', 'D'), // XVID
-                VideoWriter.FourCC('M', 'J', 'P', 'G'), // MJPEG
-                VideoWriter.FourCC('m', 'p', '4', 'v'), // MP4V
-                VideoWriter.FourCC('H', '2', '6', '4')  // H264
+                VideoWriter.FourCC('m', 'p', '4', 'v'),
+                VideoWriter.FourCC('X', 'V', 'I', 'D'),
+                VideoWriter.FourCC('M', 'J', 'P', 'G'),
+                VideoWriter.FourCC('H', '2', '6', '4')
             };
 
             foreach (var codec in codecs)
             {
+                VideoWriter? writer = null;
                 try
                 {
-                    var writer = new VideoWriter(_currentVideoPath, codec, fps, new Size(width, height));
+                    writer = new VideoWriter(_currentVideoPath, codec, fps, new Size(width, height));
                     if (writer.IsOpened())
-                    {
                         return writer;
-                    }
-                    writer?.Dispose();
                 }
-                catch
+                catch (Exception ex)
                 {
-
+                    Debug.WriteLine($"Codec de video no disponible: {ex.Message}");
                 }
+
+                writer?.Dispose();
             }
+
             return null;
         }
 
-        private async Task<bool> StopRecordingAsync()
+        private void RecordingLoop(CancellationToken cancellationToken)
         {
+            using var frame = new Mat();
+            var consecutiveErrors = 0;
+
             try
             {
-                if (_recordingTask != null && !_recordingTask.IsCompleted)
+                while (!cancellationToken.IsCancellationRequested &&
+                       consecutiveErrors < MaxConsecutiveReadErrors)
                 {
-                    await Task.WhenAny(_recordingTask, Task.Delay(3000));
+                    if (_capture?.Read(frame) == true && !frame.Empty())
+                    {
+                        _videoWriter?.Write(frame);
+                        Interlocked.Increment(ref _frameCount);
+                        consecutiveErrors = 0;
+                    }
+                    else
+                    {
+                        consecutiveErrors++;
+                    }
+
+                    if (cancellationToken.WaitHandle.WaitOne(33))
+                        break;
                 }
 
-                await Task.Delay(500);
-
-                CleanupResources();
-
-                if (!string.IsNullOrEmpty(_currentVideoPath) && File.Exists(_currentVideoPath))
+                if (consecutiveErrors >= MaxConsecutiveReadErrors)
                 {
-                    // Renombrar el archivo con el ID de la transacción si está disponible
-                    string finalPath = RenameVideoWithTransactionId();
-
-                    var fileInfo = new FileInfo(finalPath);
-                    var duration = DateTime.Now - _startTime;
-
-                    return true;
-                }
-                else
-                {
-                    return false;
+                    EventLogger.SaveLog(EventType.Error,
+                        "La grabación se detuvo por errores consecutivos leyendo la cámara.");
                 }
             }
             catch (Exception ex)
             {
-                CleanupResources();
-                return false;
+                EventLogger.SaveLog(EventType.Error, "Error en el hilo de captura de video.", ex);
+            }
+            finally
+            {
+                _isRecording = false;
             }
         }
 
-        /// <summary>
-        /// Renombra el archivo de video incluyendo el ID de la transacción y documento
-        /// </summary>
-        private string RenameVideoWithTransactionId()
+        private string FinalizeVideoName()
         {
-            try
+            if (string.IsNullOrWhiteSpace(_currentVideoPath) || !File.Exists(_currentVideoPath))
+                return string.Empty;
+
+            var transactionId = _transaction.IdTransaccionApi;
+            if (transactionId <= 0)
+                return _currentVideoPath;
+
+            var directory = Path.GetDirectoryName(_currentVideoPath) ?? string.Empty;
+            var finalPath = Path.Combine(directory, $"{transactionId}.mp4");
+            if (string.Equals(_currentVideoPath, finalPath, StringComparison.OrdinalIgnoreCase))
+                return finalPath;
+
+            if (File.Exists(finalPath))
             {
-                EventLogger.SaveLog(EventType.Info, $"[VideoRecorder] Iniciando RenameVideoWithTransactionId");
-
-                if (string.IsNullOrEmpty(_currentVideoPath) || !File.Exists(_currentVideoPath))
-                {
-                    EventLogger.SaveLog(EventType.Warning, $"[VideoRecorder] No se puede renombrar: archivo no existe o path vacío. Path: {_currentVideoPath}");
-                    return _currentVideoPath ?? string.Empty;
-                }
-
-                // Usar Transaction.Instance directamente para obtener los datos más actualizados
-                var ts = Transaction.Instance;
-                int idTransaccion = ts?.IdTransaccionApi ?? 0;
-
-
-                EventLogger.SaveLog(EventType.Info, $"[VideoRecorder] Datos para renombrar - IdTransaccion: {idTransaccion}");
-
-                if (idTransaccion == 0)
-                {
-                    // Si no hay ID de transacción, mantener el nombre original
-                    EventLogger.SaveLog(EventType.Warning, $"[VideoRecorder] IdTransaccion es 0, manteniendo nombre original: {_currentVideoPath}");
-                    return _currentVideoPath;
-                }
-
-                // Construir nuevo nombre: solo IdTransaccion.mp4
-                var directory = Path.GetDirectoryName(_currentVideoPath);
-                var newFilename = $"{idTransaccion}.mp4";
-                var newPath = Path.Combine(directory ?? "", newFilename);
-
-                EventLogger.SaveLog(EventType.Info, $"[VideoRecorder] Renombrando video de '{_currentVideoPath}' a '{newPath}'");
-
-                // Renombrar el archivo
-                if (_currentVideoPath != newPath)
-                {
-                    File.Move(_currentVideoPath, newPath);
-                    _currentVideoPath = newPath;
-                    EventLogger.SaveLog(EventType.Info, $"[VideoRecorder] Video renombrado exitosamente: {newPath}");
-                }
-
-                return newPath;
+                EventLogger.SaveLog(EventType.Warning,
+                    $"Ya existe un video para la transacción {transactionId}; se conserva el archivo temporal {_currentVideoPath}.");
+                return _currentVideoPath;
             }
-            catch (Exception ex)
-            {
-                // Si falla el renombrado, mantener el archivo original
-                EventLogger.SaveLog(EventType.Error, $"[VideoRecorder] Error al renombrar video: {ex.Message}", ex);
-                return _currentVideoPath ?? string.Empty;
-            }
-        }
 
-        private void RecordingLoop()
-        {
-            try
-            {
-                using var frame = new Mat();
-                int errorCount = 0;
-                const int maxErrors = 10;
-                const int frameInterval = 30;
-
-                while (_isRecording && errorCount < maxErrors)
-                {
-                    try
-                    {
-                        if (_capture?.Read(frame) == true && !frame.Empty())
-                        {
-                            _videoWriter?.Write(frame);
-                            _frameCount++;
-
-
-                            errorCount = 0;
-                        }
-                        else
-                        {
-                            errorCount++;
-                        }
-
-                        Thread.Sleep(33);
-                    }
-                    catch (Exception ex)
-                    {
-                        errorCount++;
-                        Thread.Sleep(100);
-                    }
-                }
-
-            }
-            catch (Exception ex)
-            {
-            }
+            File.Move(_currentVideoPath, finalPath);
+            _currentVideoPath = finalPath;
+            return finalPath;
         }
 
         private void CleanupResources()
         {
+            _recordingCancellation?.Dispose();
+            _recordingCancellation = null;
+            _recordingTask = null;
+
+            _videoWriter?.Release();
+            _videoWriter?.Dispose();
+            _videoWriter = null;
+
+            _capture?.Release();
+            _capture?.Dispose();
+            _capture = null;
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(VideoRecorder));
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            var stoppedSafely = false;
             try
             {
-                _videoWriter?.Release();
-                _videoWriter?.Dispose();
-                _videoWriter = null;
-
-                _capture?.Release();
-                _capture?.Dispose();
-                _capture = null;
-
-                _recordingTask = null;
+                stoppedSafely = StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
+                EventLogger.SaveLog(EventType.Error, "Error liberando el grabador de video.", ex);
             }
-        }
-        #endregion
 
-        #region Propiedades públicas
-        /// <summary>
-        /// Indica si la grabación está activa
-        /// </summary>
-        public bool IsRecording => _isRecording;
-
-        /// <summary>
-        /// Indica si la cámara está disponible
-        /// </summary>
-        public bool IsCameraAvailable => !_lastOperationFailed;
-        #endregion
-
-        #region IDisposable
-        public void Dispose()
-        {
-            if (_isRecording)
+            _disposed = true;
+            if (stoppedSafely)
             {
-                try
-                {
-                    StopAsync().Wait(3000);
-                }
-                catch (Exception ex)
-                {
-                    _isRecording = false;
-                }
+                CleanupResources();
+                _lifecycleGate.Dispose();
             }
-
-            CleanupResources();
+            else
+            {
+                EventLogger.SaveLog(EventType.Warning,
+                    "El grabador no liberó recursos nativos porque el hilo de captura aún podía estar activo.");
+            }
+            GC.SuppressFinalize(this);
         }
-        #endregion
     }
 }
