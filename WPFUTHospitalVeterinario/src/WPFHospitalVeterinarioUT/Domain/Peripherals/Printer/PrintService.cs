@@ -38,13 +38,13 @@ namespace Domain.Peripherals
         /// <summary>La misma resolución, en float, para las API de GDI+ que exigen float.</summary>
         private const float ReceiptDesignDpiFloat = (float)ReceiptDesignDpi;
 
+        /// <summary>Calidad del JPEG incrustado en el PDF.</summary>
+        private const long JpegQuality = 90L;
+
         /// <summary>
         /// Factor de renderizado del lienzo: se dibuja a 96 ppp x 3 (288 ppp) para que el texto
         /// del PDF salga nítido. El tamaño físico no cambia, solo la resolución de la imagen.
         /// </summary>
-
-        /// <summary>Calidad del JPEG incrustado en el PDF.</summary>
-        private const long JpegQuality = 90L;
         private const double ReceiptRenderScale = 3.0;
 
         /// <summary>Espacio inferior de la tirilla, en píxeles del diseño.</summary>
@@ -70,6 +70,19 @@ namespace Domain.Peripherals
 
         /// <summary>Abre el PDF generado para poder revisarlo.</summary>
         private const bool PdfOpenAfterPrint = true;
+
+        /// <summary>
+        /// Carpeta donde quedan las copias de las tirillas que la w80 no pudo imprimir (atasco, sin
+        /// papel, error del driver), para poder reimprimirlas desde caja. Es relativa a la carpeta
+        /// del ejecutable, o una ruta absoluta como "D:\Tirillas".
+        /// </summary>
+        private const string ReceiptBackupFolder = "Tirillas";
+
+        /// <summary>Guarda la copia cuando la w80 no pudo imprimir.</summary>
+        private const bool ReceiptBackupOnFailure = true;
+
+        /// <summary>Guarda la copia también cuando la impresión salió bien (por defecto, no).</summary>
+        private const bool ReceiptBackupAlways = false;
 
         static PrintService()
         {
@@ -109,14 +122,21 @@ namespace Domain.Peripherals
                     var wasSucess = MonitorPrintJobs();
                     if (!wasSucess) CleanPrintQueue();
                     recentImpressionSuccess = wasSucess;
+
+                    // Si la w80 no confirmó la impresión (atasco, sin papel, error del driver) queda
+                    // una copia de la tirilla en la carpeta del día, para reimprimirla desde caja.
+                    TrySaveReceiptBackup(wasSucess);
 #endif
                 }
                 catch (Exception ex)
                 {
                     EventLogger.SaveLog(EventType.Error, $"Error en la tarea Start de Impresión: {ex.Message}", ex);
-                    // Sin periféricos no hay impresora que reporte el resultado: no se interrumpe el flujo.
 #if NO_PERIPHERALS
+                    // Sin periféricos no hay impresora que reporte el resultado: no se interrumpe el flujo.
                     recentImpressionSuccess = true;
+#else
+                    // La impresión se cortó con una excepción: también es un fallo, así que se guarda la copia.
+                    TrySaveReceiptBackup(printedOk: false);
 #endif
                 }
 
@@ -357,57 +377,6 @@ namespace Domain.Peripherals
             return new Size(maxWidth, (int)Math.Round(height * scale));
         }
 
-#if NO_PERIPHERALS
-        /// <summary>
-        /// Compilación sin periféricos: la tirilla se genera como PDF por el propio programa, sin
-        /// depender de ninguna impresora ni driver. La página mide exactamente el ancho de la w80
-        /// (80 mm) y el alto del contenido, y el dibujo se coloca a tamaño físico real.
-        /// En Release este camino no se compila: se sigue usando la w80.
-        /// </summary>
-        private static void PrintPdf()
-        {
-            string? generatedFile = null;
-
-            try
-            {
-                var outputFolder = Path.IsPathRooted(PdfOutputFolder)
-                    ? PdfOutputFolder
-                    : Path.Combine(AppInfo.APP_DIR, PdfOutputFolder);
-
-                Directory.CreateDirectory(outputFolder);
-                var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-
-                using var canvas = CreateReceiptCanvas(ReceiptWidthInPixels(), ReceiptContentHeightInPixels());
-
-                try
-                {
-                    generatedFile = SaveReceiptPdf(outputFolder, stamp, canvas);
-                    EventLogger.SaveLog(EventType.Info,
-                        $"Sin periféricos: tirilla generada en '{generatedFile}'. " +
-                        $"La tirilla mide {ReceiptWidthMillimeters(canvas):0.#} x {ReceiptHeightMillimeters(canvas):0.#} mm " +
-                        $"y va en la esquina de una hoja de {PdfPageWidthMm:0.#} x {PdfPageHeightMm:0.#} mm.");
-                }
-                catch (Exception ex)
-                {
-                    // Respaldo: si el PDF fallara, siempre queda la imagen para revisar la tirilla.
-                    EventLogger.SaveLog(EventType.Error, $"No se pudo generar el PDF de la tirilla: {ex.Message}", ex);
-                    generatedFile = SaveReceiptImage(outputFolder, stamp, canvas);
-                    EventLogger.SaveLog(EventType.Info, $"Sin periféricos: tirilla guardada como imagen en '{generatedFile}'.");
-                }
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error, $"Error al generar la tirilla: {ex.Message}", ex);
-            }
-            finally
-            {
-                // Sin periféricos la tirilla no debe interrumpir el flujo del kiosco.
-                recentImpressionSuccess = true;
-            }
-
-            if (generatedFile != null) OpenGeneratedFile(generatedFile);
-        }
-
         /// <summary>Resolución real del lienzo (96 ppp de diseño x factor de renderizado).</summary>
         private static double CanvasDpi => ReceiptDesignDpi * ReceiptRenderScale;
 
@@ -522,6 +491,150 @@ namespace Domain.Peripherals
             using var stream = new MemoryStream();
             canvas.Save(stream, jpegCodec, parameters);
             return stream.ToArray();
+        }
+
+        /// <summary>
+        /// Guarda copia de la tirilla cuando corresponde (impresión fallida por defecto, o siempre
+        /// si se activa <see cref="ReceiptBackupAlways"/>). Devuelve true si guardó algo.
+        /// Nunca lanza: un problema guardando la copia no puede afectar la venta.
+        /// </summary>
+        private static bool TrySaveReceiptBackup(bool printedOk)
+        {
+            if (!ReceiptBackupAlways && (printedOk || !ReceiptBackupOnFailure)) return false;
+
+            try
+            {
+                var folder = ReceiptBackupFolderFor(DateTime.Now);
+                Directory.CreateDirectory(folder);
+
+                var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                var documento = ReceiptDocumentHint();
+                if (documento.Length > 0) stamp += $"-doc-{documento}";
+
+                string filePath;
+
+                using (var canvas = CreateReceiptCanvas(ReceiptWidthInPixels(), ReceiptContentHeightInPixels()))
+                {
+                    try
+                    {
+                        filePath = SaveReceiptPdf(folder, stamp, canvas);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Respaldo del respaldo: si el PDF fallara, queda la imagen de la tirilla.
+                        EventLogger.SaveLog(EventType.Error, $"No se pudo guardar el PDF de la tirilla: {ex.Message}", ex);
+                        filePath = SaveReceiptImage(folder, stamp, canvas);
+                    }
+                }
+
+                EventLogger.SaveLog(EventType.Warning,
+                    $"La w80 no confirmó la impresión: quedó copia de la tirilla en '{filePath}' para reimprimirla.");
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Error, $"No se pudo guardar la copia de la tirilla: {ex.Message}", ex);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Carpeta por año, mes y día: todas las copias de un mismo día quedan juntas, para poder
+        /// sacarles una copia completa cuando haga falta.
+        /// </summary>
+        private static string ReceiptBackupFolderFor(DateTime fecha)
+        {
+            var root = Path.IsPathRooted(ReceiptBackupFolder)
+                ? ReceiptBackupFolder
+                : Path.Combine(AppInfo.APP_DIR, ReceiptBackupFolder);
+
+            return Path.Combine(
+                root,
+                fecha.ToString("yyyy"),
+                fecha.ToString("MM"),
+                fecha.ToString("yyyy-MM-dd"));
+        }
+
+        /// <summary>
+        /// Número de documento de la venta, para que el archivo de la copia se identifique fácil.
+        /// Se toma del dato que la tirilla dibuja al lado de "Nro. Documento"; si no está, el archivo
+        /// queda solo con la fecha y la hora.
+        /// </summary>
+        private static string ReceiptDocumentHint()
+        {
+            var printData = _printData;
+            if (printData == null) return string.Empty;
+
+            for (int i = 0; i < printData.Count - 1; i++)
+            {
+                if (printData[i].Text != "Nro. Documento") continue;
+
+                var documento = printData[i + 1].Text;
+                if (string.IsNullOrWhiteSpace(documento)) return string.Empty;
+
+                var limpio = new StringBuilder();
+                foreach (char caracter in documento)
+                {
+                    if (char.IsLetterOrDigit(caracter)) limpio.Append(caracter);
+                    if (limpio.Length >= 20) break;
+                }
+
+                return limpio.ToString();
+            }
+
+            return string.Empty;
+        }
+
+#if NO_PERIPHERALS
+        /// <summary>
+        /// Compilación sin periféricos: la tirilla se genera como PDF por el propio programa, sin
+        /// depender de ninguna impresora ni driver. La página mide exactamente el ancho de la w80
+        /// (80 mm) y el alto del contenido, y el dibujo se coloca a tamaño físico real.
+        /// En Release este camino no se compila: se sigue usando la w80.
+        /// </summary>
+        private static void PrintPdf()
+        {
+            string? generatedFile = null;
+
+            try
+            {
+                var outputFolder = Path.IsPathRooted(PdfOutputFolder)
+                    ? PdfOutputFolder
+                    : Path.Combine(AppInfo.APP_DIR, PdfOutputFolder);
+
+                Directory.CreateDirectory(outputFolder);
+                var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+
+                using var canvas = CreateReceiptCanvas(ReceiptWidthInPixels(), ReceiptContentHeightInPixels());
+
+                try
+                {
+                    generatedFile = SaveReceiptPdf(outputFolder, stamp, canvas);
+                    EventLogger.SaveLog(EventType.Info,
+                        $"Sin periféricos: tirilla generada en '{generatedFile}'. " +
+                        $"La tirilla mide {ReceiptWidthMillimeters(canvas):0.#} x {ReceiptHeightMillimeters(canvas):0.#} mm " +
+                        $"y va en la esquina de una hoja de {PdfPageWidthMm:0.#} x {PdfPageHeightMm:0.#} mm.");
+                }
+                catch (Exception ex)
+                {
+                    // Respaldo: si el PDF fallara, siempre queda la imagen para revisar la tirilla.
+                    EventLogger.SaveLog(EventType.Error, $"No se pudo generar el PDF de la tirilla: {ex.Message}", ex);
+                    generatedFile = SaveReceiptImage(outputFolder, stamp, canvas);
+                    EventLogger.SaveLog(EventType.Info, $"Sin periféricos: tirilla guardada como imagen en '{generatedFile}'.");
+                }
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Error, $"Error al generar la tirilla: {ex.Message}", ex);
+            }
+            finally
+            {
+                // Sin periféricos la tirilla no debe interrumpir el flujo del kiosco.
+                recentImpressionSuccess = true;
+            }
+
+            if (generatedFile != null) OpenGeneratedFile(generatedFile);
         }
 
         /// <summary>Abre el archivo generado para poder revisarlo.</summary>

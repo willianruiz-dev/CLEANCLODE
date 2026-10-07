@@ -1,11 +1,11 @@
-﻿# Impresión de la tirilla en modo Debug (PDF)
+﻿# Impresión de la tirilla (Debug: PDF de prueba / Release: w80 con copia de respaldo)
 
 ## Qué hace
 
 | Compilación | Cómo imprime | Resultado |
 |---|---|---|
 | **`NO_PERIPHERALS`** (Debug) | El **propio programa genera el PDF**; no usa ninguna impresora ni driver | **Hoja A4** (`210 x 297 mm`) con la **tirilla en la esquina superior izquierda, a su tamaño real de 80 mm**, sin estirarla. Se abre solo para revisarla. |
-| **Release** (sin `NO_PERIPHERALS`) | **w80** (cola del sistema) | Igual que siempre: `PrintDocument` → w80 → `MonitorPrintJobs`. El camino del PDF **no se compila**. |
+| **Release** (sin `NO_PERIPHERALS`) | **w80** (cola del sistema) | Igual que siempre: `PrintDocument` → w80 → `MonitorPrintJobs`. Si la impresión **falla** (atasco, sin papel, error del driver) queda una **copia en PDF** de esa tirilla en `Tirillas\año\mes\día\`, para reimprimirla desde caja. Si imprime bien, no se guarda nada. |
 
 El modo se elige con la constante de compilación `NO_PERIPHERALS`, que el proyecto ya define para
 Debug (ver `WPFHospitalVeterinarioUT.csproj`), igual que el resto del código.
@@ -52,6 +52,9 @@ private const double ReceiptWidthMm     = 80.0;         // ancho de la tirilla d
 private const double PdfPageWidthMm     = 210.0;        // hoja A4 del PDF
 private const double PdfPageHeightMm    = 297.0;
 private const double PdfPageMarginMm    = 5.0;          // margen de la hoja
+private const string ReceiptBackupFolder = "Tirillas"; // copias de las tirillas que la w80 no pudo imprimir
+private const bool   ReceiptBackupOnFailure = true;    // guardar copia cuando la w80 falla
+private const bool   ReceiptBackupAlways    = false;   // ponerlo en true para guardar TODAS las tirillas
 ```
 
 `PdfOutputFolder` acepta una ruta absoluta, por ejemplo `D:\TirillasPruebas`, y `PdfOpenAfterPrint`
@@ -63,6 +66,54 @@ en `false` deja el archivo sin abrirlo.
 2. Hacer una transacción hasta la pantalla final y pulsar imprimir.
 3. Al terminar aparece `Receipts\tirilla-AAAAMMDD-HHMMSS.pdf` y se abre solo.
 4. Comparar contra una tirilla real: el ancho (80 mm) y el tamaño del texto deben coincidir.
+
+## Copia de seguridad cuando la w80 falla (Release)
+
+La impresión sigue siendo la de siempre; lo único que se agrega es que, **si la tirilla no se pudo
+imprimir**, el programa guarda esa misma tirilla (el PDF que ya quedó igual a la real) para poder
+sacarle copia después. Nunca abre nada en pantalla en producción.
+
+Cuándo se guarda:
+
+- `MonitorPrintJobs` no confirma la impresión en `numberOfSecondsToPrint` segundos (atasco, sin papel,
+  tapa abierta, cola trabada).
+- La impresión se corta con una excepción.
+
+Dónde queda (una carpeta por año, mes y día, como se pidió):
+
+```
+<carpeta del ejecutable>\Tirillas\
+└── 2026\
+    └── 10\
+        └── 2026-10-07\
+            ├── tirilla-20261007-113950-doc-70435855.pdf
+            └── tirilla-20261007-115502-doc-1017856455.pdf
+```
+
+El nombre lleva la fecha, la hora y el **número de documento** de la venta, para identificarla fácil.
+Todas las del mismo día quedan juntas: se abre la carpeta del día y se imprimen las que hagan falta
+(el PDF es una hoja A4 con la tirilla en la esquina, a tamaño real, así que se imprime en cualquier
+impresora de oficina).
+
+Si el PDF no se pudiera escribir, queda el **PNG** de la tirilla en la misma carpeta.
+
+### Cómo cambiar el comportamiento
+
+Todo son constantes de `PrintService` (nada de `App.config`):
+
+| Constante | Para qué |
+|---|---|
+| `ReceiptBackupFolder = "Tirillas"` | Carpeta de las copias. Relativa al ejecutable, o absoluta: `@"D:\Tirillas"`. |
+| `ReceiptBackupOnFailure = true` | Guarda la copia cuando la w80 falla. En `false` no guarda nada. |
+| `ReceiptBackupAlways = false` | En `true` guarda **todas** las tirillas (también las que salieron bien). |
+
+### Rastro en el log
+
+| Línea | Significa |
+|---|---|
+| `La w80 no confirmó la impresión: quedó copia de la tirilla en '...' para reimprimirla.` | Se guardó la copia del día. |
+| `No se pudo guardar el PDF de la tirilla: <motivo>` | Falló el PDF; quedó el PNG en la misma carpeta. |
+| `No se pudo guardar la copia de la tirilla: <motivo>` | No se pudo escribir ni el PDF ni el PNG (revisar permisos de la carpeta). |
 
 ## Si algo no sale como se espera
 
@@ -116,8 +167,10 @@ el lienzo del PDF pide las imágenes ajustadas al ancho de la tirilla
 (`DrawReceipt(graphics, fitImagesToReceiptWidth: true)`); la impresora lo llama **sin ese ajuste**, con
 las imágenes a tamaño natural, igual que antes.
 
-La única línea que se agregó al camino de Release es un log informativo
-(`Imprimiendo la tirilla con 'w80'.`); no cambia qué se imprime ni cómo.
+Al camino de Release solo se le agregaron un log informativo (`Imprimiendo la tirilla con 'w80'.`) y,
+**después** de imprimir, la llamada que guarda la copia únicamente cuando la impresión falló
+(`TrySaveReceiptBackup(wasSucess)`). No cambia qué se imprime ni cómo, y esa copia nunca abre nada en
+pantalla (abrir el archivo es solo del modo Debug).
 
 ### Líneas que no caben
 
