@@ -62,8 +62,6 @@ namespace Presentation.UserControls.Flows
         /// <summary>Rojo del proyecto (Fonts.xaml) para el campo que aún no está bien.</summary>
         private Brush ErrorBrush => _errorBrush ??= TryFindResource("ERRORCOLOR") as Brush ?? Brushes.Red;
 
-        private readonly TimerService _timer = new();
-
         public FormUC()
         {
             InitializeComponent();
@@ -79,7 +77,7 @@ namespace Presentation.UserControls.Flows
 
             UpdateContinueState();
 
-            GoTimer();
+            StartTimer();
 
         }
         private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -87,7 +85,6 @@ namespace Presentation.UserControls.Flows
             _ts.customFlows.generaLInformationClient.PropertyChanged -= OnPersonalInformationChanged;
             _documentLookupCancellation?.Cancel();
             _documentLookupCancellation?.Dispose();
-            StopTimer();
         }
 
         private void OnPersonalInformationChanged(object? sender, PropertyChangedEventArgs e)
@@ -447,27 +444,9 @@ namespace Presentation.UserControls.Flows
             GoTo(new ReferenceToPayUC());
         }
 
-        public void GoTimer()
-        {
-            try
-            {
-                TxtTimer.Text = STR_TIMER;
+        protected override string TimerDuration => STR_TIMER;
 
-                _timer.Start(STR_TIMER,
-                    onTick: time => TxtTimer.Text = time,
-                    onTimeout: () => GoTo(new PublicityUC()));
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error, $"Ocurrió un error en tiempo de ejecución: {ex.Message}", ex);
-            }
-        }
-
-        public void StopTimer()
-        {
-            _timer.Stop();
-        }
-
+        protected override void OnTimerTimeout() => GoTo(new PublicityUC());
 
         private void BtnSalir_MouseDown(object sender, EventArgs e)
         {

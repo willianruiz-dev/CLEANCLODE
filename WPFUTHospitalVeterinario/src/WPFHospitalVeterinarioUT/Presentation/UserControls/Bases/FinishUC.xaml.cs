@@ -30,7 +30,6 @@ namespace Presentation.UserControls.Bases
     public partial class FinishUC : AppUserControl
     {
         private const string STR_TIMER = "01:30";
-        private readonly TimerService _timer = new();
 
         private ObservableCollection<CalificacionData> _listCalificacion = new();
         private FinishViewModel _viewModel = new();
@@ -85,7 +84,7 @@ namespace Presentation.UserControls.Bases
             }
 
             EnableView();
-            GoTimer();
+            StartTimer();
         }
 
         private async Task CompletePrintProcess()
@@ -116,7 +115,6 @@ namespace Presentation.UserControls.Bases
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
             PrintService.recentImpressionSuccess = false;
-            StopTimer();
         }
 
         #region UI control methods
@@ -247,26 +245,9 @@ namespace Presentation.UserControls.Bases
         #endregion
 
         #region Timer
-        public void GoTimer()
-        {
-            try
-            {
-                TxtTimer.Text = STR_TIMER;
+        protected override string TimerDuration => STR_TIMER;
 
-                _timer.Start(STR_TIMER,
-                    onTick: time => TxtTimer.Text = time,
-                    onTimeout: () => GoTo(new PublicityUC()));
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error, $"Ocurrió un error en tiempo de ejecución: {ex.Message}", ex);
-            }
-        }
-
-        public void StopTimer()
-        {
-            _timer.Stop();
-        }
+        protected override void OnTimerTimeout() => GoTo(new PublicityUC());
         #endregion
 
         private Task StopVideoRecording()

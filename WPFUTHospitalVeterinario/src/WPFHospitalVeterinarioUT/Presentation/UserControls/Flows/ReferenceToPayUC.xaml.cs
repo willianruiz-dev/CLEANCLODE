@@ -21,7 +21,6 @@ namespace Presentation.UserControls.Flows
     {
         private const string STR_TIMER = "02:30";
         private Transaction _ts;
-        private readonly TimerService _timer = new();
         public ReferenceToPayUC()
         {
             InitializeComponent();
@@ -31,7 +30,7 @@ namespace Presentation.UserControls.Flows
             nameUser.Text = "Hola, " + CapitaliceWord(FindShortWord(_ts.customFlows.generaLInformationClient.FirstName));
             this.Unloaded += OnUnloaded;
             InputInvoice.Text = FormatMoney("0");
-            GoTimer();
+            StartTimer();
 
 
         }
@@ -40,7 +39,6 @@ namespace Presentation.UserControls.Flows
 
 
             Keyboard.KeyboardPressed -= OnKeyboardPressed;
-            StopTimer();
         }
 
         #region UI EVENTS
@@ -189,26 +187,9 @@ namespace Presentation.UserControls.Flows
             return RecordingService.Instance.StartAsync();
         }
 
-        public void GoTimer()
-        {
-            try
-            {
-                TxtTimer.Text = STR_TIMER;
+        protected override string TimerDuration => STR_TIMER;
 
-                _timer.Start(STR_TIMER,
-                    onTick: time => TxtTimer.Text = time,
-                    onTimeout: () => GoTo(new PublicityUC()));
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error, $"Ocurrió un error en tiempo de ejecución: {ex.Message}", ex);
-            }
-        }
-
-        public void StopTimer()
-        {
-            _timer.Stop();
-        }
+        protected override void OnTimerTimeout() => GoTo(new PublicityUC());
         #endregion
 
     }
