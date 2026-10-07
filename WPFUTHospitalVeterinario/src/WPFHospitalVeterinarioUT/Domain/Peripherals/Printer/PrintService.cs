@@ -40,6 +40,9 @@ namespace Domain.Peripherals
         /// Factor de renderizado del lienzo: se dibuja a 96 ppp x 3 (288 ppp) para que el texto
         /// del PDF salga nítido. El tamaño físico no cambia, solo la resolución de la imagen.
         /// </summary>
+
+        /// <summary>Calidad del JPEG incrustado en el PDF.</summary>
+        private const long JpegQuality = 90L;
         private const double ReceiptRenderScale = 3.0;
 
         /// <summary>Espacio inferior de la tirilla, en píxeles del diseño.</summary>
@@ -501,13 +504,11 @@ namespace Domain.Peripherals
 
             BeginObject(3);
             Write(FormattableString.Invariant(
-                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pageWidthPoints:0.####} {pageHeightPoints:0.####}] " +
-                "/Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n"));
+                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pageWidthPoints:0.####} {pageHeightPoints:0.####}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n"));
 
             BeginObject(4);
             Write(FormattableString.Invariant(
-                $"<< /Type /XObject /Subtype /Image /Width {canvas.Width} /Height {canvas.Height} " +
-                $"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {jpeg.Length} >>\nstream\n"));
+                $"<< /Type /XObject /Subtype /Image /Width {canvas.Width} /Height {canvas.Height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {jpeg.Length} >>\nstream\n"));
             pdf.Write(jpeg, 0, jpeg.Length);
             Write("\nendstream\nendobj\n");
 
@@ -529,14 +530,16 @@ namespace Domain.Peripherals
         /// <summary>Codifica el lienzo como JPEG (calidad 90): nítido y con poco peso.</summary>
         private static byte[] EncodeJpeg(Bitmap canvas)
         {
-            var encoder = ImageCodecInfo.GetImageEncoders().FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid);
-            if (encoder == null) throw new InvalidOperationException("No se encontró el codificador JPEG del sistema.");
+            var jpegCodec = ImageCodecInfo.GetImageEncoders().FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid);
+            if (jpegCodec == null) throw new InvalidOperationException("No se encontró el codificador JPEG del sistema.");
 
+            // Se califica System.Drawing.Imaging.Encoder: 'Encoder' a secas también existe en System.Text.
+            long quality = JpegQuality;
             using var parameters = new EncoderParameters(1);
-            parameters.Param[0] = new EncoderParameter(Encoder.Quality, 90L);
+            parameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
 
             using var stream = new MemoryStream();
-            canvas.Save(stream, encoder, parameters);
+            canvas.Save(stream, jpegCodec, parameters);
             return stream.ToArray();
         }
 
