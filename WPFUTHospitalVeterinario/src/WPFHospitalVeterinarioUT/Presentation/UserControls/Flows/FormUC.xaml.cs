@@ -23,7 +23,7 @@ namespace Presentation.UserControls.Flows
         string typeDocument;
         private const string STR_TIMER = "03:00";
 
-        private TimerGeneric _timer;
+        private TimerGeneric? _timer;
 
         public FormUC()
         {
@@ -85,6 +85,7 @@ namespace Presentation.UserControls.Flows
         {
             try
             {
+                _timer?.Dispose();
                 _timer = new TimerGeneric(STR_TIMER);
 
                 TxtTimer.Text = STR_TIMER;
@@ -117,12 +118,8 @@ namespace Presentation.UserControls.Flows
         {
             try
             {
-                if (_timer != null)
-                {
-                    _timer.CallBackTimeOut = null;
-                    _timer.CallBackTick = null;
-                    _timer.CallBackStop?.Invoke();
-                }
+                _timer?.Dispose();
+                _timer = null;
             }
             catch (Exception ex)
             {

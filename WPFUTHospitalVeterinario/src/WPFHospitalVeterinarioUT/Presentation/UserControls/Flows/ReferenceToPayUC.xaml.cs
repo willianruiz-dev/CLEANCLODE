@@ -37,7 +37,7 @@ namespace Presentation.UserControls.Flows
         private ManualInputViewModel _viewModel;
         private ModalWindow? _currentLoadModal = null;
         private Border? _borderSelected = null;
-        private TimerGeneric _timer;
+        private TimerGeneric? _timer;
         public ReferenceToPayUC()
         {
             InitializeComponent();
@@ -219,6 +219,7 @@ namespace Presentation.UserControls.Flows
         {
             try
             {
+                _timer?.Dispose();
                 _timer = new TimerGeneric(STR_TIMER);
 
                 TxtTimer.Text = STR_TIMER;
@@ -251,12 +252,8 @@ namespace Presentation.UserControls.Flows
         {
             try
             {
-                if (_timer != null)
-                {
-                    _timer.CallBackTimeOut = null;
-                    _timer.CallBackTick = null;
-                    _timer.CallBackStop?.Invoke();
-                }
+                _timer?.Dispose();
+                _timer = null;
             }
             catch (Exception ex)
             {

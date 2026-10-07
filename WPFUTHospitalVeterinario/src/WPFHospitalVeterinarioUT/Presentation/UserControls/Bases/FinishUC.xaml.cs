@@ -29,7 +29,7 @@ namespace Presentation.UserControls.Bases
     public partial class FinishUC : AppUserControl
     {
         private const string STR_TIMER = "01:30";
-        private TimerGeneric _timer;
+        private TimerGeneric? _timer;
 
         private ObservableCollection<CalificacionData> _listCalificacion = new();
         private FinishViewModel _viewModel = new();
@@ -250,6 +250,7 @@ namespace Presentation.UserControls.Bases
         {
             try
             {
+                _timer?.Dispose();
                 _timer = new TimerGeneric(STR_TIMER);
 
                 TxtTimer.Text = STR_TIMER;
@@ -282,12 +283,8 @@ namespace Presentation.UserControls.Bases
         {
             try
             {
-                if (_timer != null)
-                {
-                    _timer.CallBackTimeOut = null;
-                    _timer.CallBackTick = null;
-                    _timer.CallBackStop?.Invoke();
-                }
+                _timer?.Dispose();
+                _timer = null;
             }
             catch (Exception ex)
             {
