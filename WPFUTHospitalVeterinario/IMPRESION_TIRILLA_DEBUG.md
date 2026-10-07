@@ -53,6 +53,26 @@ explícitamente a la cola de PDF configurada, no a la impresora predeterminada d
 3. Al terminar aparece `Receipts\tirilla-AAAAMMDD-HHMMSS.pdf` (y se abre si `PdfOpenAfterPrint`).
 4. Comparar el PDF contra una tirilla real: el ancho (80 mm) y el tamaño del texto deben coincidir.
 
+## Tamaño de la tirilla en el PDF
+
+El PDF se arma con el ancho real de la w80 (**80 mm**) y el alto que ocupa el contenido, y las
+coordenadas se dibujan en un lienzo de **96 ppp** (la resolución con la que está pensado `BuildPrint`).
+
+La cabecera (`Assets/Images/Voucher.png`) mide **828 x 242 px**, es decir **219 mm de ancho** a 96 ppp:
+dibujada a tamaño natural desbordaba la tirilla y salía cortada. Ahora se ajusta al ancho de la
+tirilla conservando la proporción (**302 x 88 px** de diseño = 80 x 23 mm), y ese alto encaja justo
+antes de la primera línea de texto, que el diseño dibuja en `y = 105`.
+
+Reglas usadas para que el PDF se vea como la tirilla:
+
+| Elemento | Regla |
+|---|---|
+| Página | Ancho de la w80 (80 mm o el de su cola) y alto del contenido. |
+| Lienzo de dibujo | 96 ppp; se estira al ancho de la página, así la escala no depende de los ppp que reporte la impresora (Microsoft Print to PDF suele reportar 600). |
+| Imágenes | Nunca más anchas que el ancho de la tirilla, conservando proporción. |
+| Texto | Tamaño real, en píxeles de diseño a 96 ppp. |
+| Ancho del lienzo | Exactamente la tirilla; solo se amplía (con margen) si algún texto no cupiera. |
+
 ## Si no aparece el PDF
 
 El proceso ya no falla en silencio: siempre deja rastro en `Logs\Log_application\LogAAAA-MM-DD.json`

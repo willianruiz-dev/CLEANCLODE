@@ -209,7 +209,13 @@ namespace Domain.Peripherals
                 }
                 else if (!string.IsNullOrEmpty(printObj.Image))
                 {
-                    _graphics.DrawImage(Image.FromFile(printObj.Image), printObj.X, printObj.Y);
+                    // Nunca más ancha que el área imprimible: la cabecera ocupa el ancho de la tirilla.
+                    int availableWidth = (int)Math.Max(0, graphics.VisibleClipBounds.Width - printObj.X);
+                    using var image = Image.FromFile(printObj.Image);
+                    var size = FitToReceiptWidth(image.Width, image.Height, availableWidth);
+                    if (size.IsEmpty) continue;
+
+                    _graphics.DrawImage(image, new Rectangle(printObj.X, printObj.Y, size.Width, size.Height));
                 }
                 else if (printObj.Point.X != 0 && printObj.Point.Y != 0)
                 {
@@ -254,7 +260,13 @@ namespace Domain.Peripherals
         private static int ReceiptCanvasWidthInPixels()
         {
             int w80WidthPixels = (int)Math.Round(ResolveW80WidthInHundredthsInch() / 100.0 * ReceiptDesignDpi);
-            return Math.Max(w80WidthPixels, MeasureReceiptContentWidth() + ReceiptSideMarginPx);
+            int contentWidth = MeasureReceiptContentWidth();
+
+            // En el caso normal (el contenido cabe) la tirilla mide exactamente el ancho de la w80.
+            // Solo si algún texto fuera más ancho se amplía, con un pequeño margen, para no cortarlo.
+            return contentWidth <= w80WidthPixels
+                ? w80WidthPixels
+                : contentWidth + ReceiptSideMarginPx;
         }
 
         /// <summary>Ancho que ocupa el contenido de la tirilla, en píxeles del diseño.</summary>
@@ -279,7 +291,8 @@ namespace Domain.Peripherals
                 }
                 else if (!string.IsNullOrEmpty(printObj.Image))
                 {
-                    itemWidth = MeasureImage(printObj.Image).width;
+                    var (imageWidth, imageHeight) = MeasureImage(printObj.Image);
+                    itemWidth = FitToReceiptWidth(imageWidth, imageHeight, ReceiptWidthInPixels()).Width;
                 }
                 else if (!string.IsNullOrEmpty(printObj.Text) && printObj.Font != null)
                 {
@@ -310,7 +323,8 @@ namespace Domain.Peripherals
                 }
                 else if (!string.IsNullOrEmpty(printObj.Image))
                 {
-                    itemHeight = MeasureImage(printObj.Image).height;
+                    var (imageWidth, imageHeight) = MeasureImage(printObj.Image);
+                    itemHeight = FitToReceiptWidth(imageWidth, imageHeight, ReceiptWidthInPixels()).Height;
                 }
                 else if (printObj.Font != null)
                 {
@@ -340,6 +354,24 @@ namespace Domain.Peripherals
 
         private static int MillimetersToHundredthsInch(double millimeters) =>
             (int)Math.Round(millimeters / 25.4 * 100.0);
+
+        /// <summary>Ancho de la tirilla en píxeles del diseño.</summary>
+        private static int ReceiptWidthInPixels() =>
+            (int)Math.Round(ReceiptWidthMm / 25.4 * ReceiptDesignDpi);
+
+        /// <summary>
+        /// Ajusta una imagen al ancho de la tirilla conservando la proporción. La cabecera
+        /// (Voucher.png, 828 px = 219 mm a 96 ppp) es más ancha que la tirilla de 80 mm: sin este
+        /// ajuste se dibujaría a tamaño natural y saldría cortada.
+        /// </summary>
+        private static Size FitToReceiptWidth(int width, int height, int maxWidth)
+        {
+            if (width <= 0 || height <= 0) return Size.Empty;
+            if (width <= maxWidth) return new Size(width, height);
+
+            double scale = (double)maxWidth / width;
+            return new Size(maxWidth, (int)Math.Round(height * scale));
+        }
 
         /// <summary>Ancho de la w80 tomado de su propia cola de impresión, si está instalada.</summary>
         private static int ResolveW80WidthInHundredthsInch()
