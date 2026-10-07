@@ -30,6 +30,9 @@ namespace Domain.Peripherals
         /// <summary>Resolución con la que están pensadas las coordenadas de la tirilla.</summary>
         private const double ReceiptDesignDpi = 96.0;
 
+        /// <summary>La misma resolución, en float, para las API de GDI+ que exigen float.</summary>
+        private const float ReceiptDesignDpiFloat = (float)ReceiptDesignDpi;
+
         /// <summary>Espacio inferior de la tirilla, en píxeles del diseño.</summary>
         private const int ReceiptBottomMarginPx = 40;
 
@@ -179,7 +182,10 @@ namespace Domain.Peripherals
         /// <summary>Dibuja la tirilla con las coordenadas originales del diseño.</summary>
         private static void DrawReceipt(Graphics graphics)
         {
-            foreach (var printObj in _printData)
+            var printData = _printData;
+            if (printData == null) return;
+
+            foreach (var printObj in printData)
             {
                 _graphics = graphics;
 
@@ -214,7 +220,7 @@ namespace Domain.Peripherals
             int canvasHeight = ReceiptContentHeightInPixels();
 
             using var canvas = new Bitmap(canvasWidth, canvasHeight);
-            canvas.SetResolution((float)ReceiptDesignDpi, (float)ReceiptDesignDpi);
+            canvas.SetResolution(ReceiptDesignDpiFloat, ReceiptDesignDpiFloat);
             using (var canvasGraphics = Graphics.FromImage(canvas))
             {
                 canvasGraphics.Clear(Color.White);
@@ -243,10 +249,13 @@ namespace Domain.Peripherals
             int maxWidth = 0;
 
             using var probe = new Bitmap(1, 1);
-            probe.SetResolution((float)ReceiptDesignDpi, (float)ReceiptDesignDpi);
+            probe.SetResolution(ReceiptDesignDpiFloat, ReceiptDesignDpiFloat);
             using var probeGraphics = Graphics.FromImage(probe);
 
-            foreach (var printObj in _printData ?? new List<PrintObj>())
+            var printData = _printData;
+            if (printData == null) return 0;
+
+            foreach (var printObj in printData)
             {
                 int itemWidth = 0;
 
@@ -274,7 +283,10 @@ namespace Domain.Peripherals
         {
             int maxHeight = 0;
 
-            foreach (var printObj in _printData ?? new List<PrintObj>())
+            var printData = _printData;
+            if (printData == null) return ReceiptBottomMarginPx;
+
+            foreach (var printObj in printData)
             {
                 int itemHeight = 0;
 
@@ -288,7 +300,7 @@ namespace Domain.Peripherals
                 }
                 else if (printObj.Font != null)
                 {
-                    itemHeight = (int)Math.Ceiling(printObj.Font.GetHeight(ReceiptDesignDpi / 72.0));
+                    itemHeight = (int)Math.Ceiling(printObj.Font.GetHeight(ReceiptDesignDpiFloat / 72f));
                 }
 
                 maxHeight = Math.Max(maxHeight, printObj.Y + itemHeight);
@@ -314,6 +326,30 @@ namespace Domain.Peripherals
 
         private static int MillimetersToHundredthsInch(double millimeters) =>
             (int)Math.Round(millimeters / 25.4 * 100.0);
+
+        /// <summary>Ancho de la w80 tomado de su propia cola de impresión, si está instalada.</summary>
+        private static int ResolveW80WidthInHundredthsInch()
+        {
+            try
+            {
+                using var w80 = new PrintDocument();
+                w80.PrinterSettings.PrinterName = W80_PRINTER_NAME;
+
+                if (w80.PrinterSettings.IsValid)
+                {
+                    var paperSize = w80.DefaultPageSettings.PaperSize;
+                    if (paperSize != null && paperSize.Width > 0)
+                        return paperSize.Width;
+                }
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Warning,
+                    $"No se pudo leer el tamaño de la w80, se usa {ReceiptWidthMm} mm de ancho: {ex.Message}");
+            }
+
+            return MillimetersToHundredthsInch(ReceiptWidthMm);
+        }
 
 #if DEBUG
         /// <summary>
@@ -404,29 +440,6 @@ namespace Domain.Peripherals
             return new PaperSize("Tirilla w80", width, height);
         }
 
-        /// <summary>Ancho de la w80 tomado de su propia cola de impresión, si está instalada.</summary>
-        private static int ResolveW80WidthInHundredthsInch()
-        {
-            try
-            {
-                using var w80 = new PrintDocument();
-                w80.PrinterSettings.PrinterName = W80_PRINTER_NAME;
-
-                if (w80.PrinterSettings.IsValid)
-                {
-                    var paperSize = w80.DefaultPageSettings.PaperSize;
-                    if (paperSize != null && paperSize.Width > 0)
-                        return paperSize.Width;
-                }
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Warning,
-                    $"No se pudo leer el tamaño de la w80, se usa {ReceiptWidthMm} mm de ancho: {ex.Message}");
-            }
-
-            return MillimetersToHundredthsInch(ReceiptWidthMm);
-        }
 #endif
 
         private static bool MonitorPrintJobs()
