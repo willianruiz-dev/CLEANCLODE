@@ -1,5 +1,6 @@
 ﻿using Domain.UIServices;
 using Domain.Variables;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Printing;
 using System.IO;
@@ -19,6 +20,27 @@ namespace Domain.Peripherals
         private static PrintProperties _properties;
         public static List<PrintObj> _printData;
         public static bool? recentImpressionSuccess;
+
+        /// <summary>Nombre de la cola de la impresora térmica de producción.</summary>
+        private const string W80_PRINTER_NAME = "w80";
+
+        /// <summary>Ancho de la tirilla de la w80, en milímetros.</summary>
+        private const double ReceiptWidthMm = 80.0;
+
+        /// <summary>Resolución con la que están pensadas las coordenadas de la tirilla.</summary>
+        private const double ReceiptDesignDpi = 96.0;
+
+        /// <summary>Espacio inferior de la tirilla, en píxeles del diseño.</summary>
+        private const int ReceiptBottomMarginPx = 40;
+
+        /// <summary>Margen lateral de la tirilla, en píxeles del diseño.</summary>
+        private const int ReceiptSideMarginPx = 10;
+
+        /// <summary>
+        /// Indica que la impresión en curso se está generando como PDF (solo ocurre en DEBUG).
+        /// </summary>
+        private static bool _printToPdfFile;
+
         static PrintService()
         {
             _properties = new PrintProperties("", 9600);
@@ -44,17 +66,17 @@ namespace Domain.Peripherals
             {
                 try
                 {
-                    // CORRECCION: Simular impresión en modo debug para evitar errores de OneNote
 #if DEBUG
-                    EventLogger.SaveLog(EventType.Warning, "Modo DEBUG: Simulando impresion sin hardware");
-                    recentImpressionSuccess = true;
-                    return;  // Salir sin intentar imprimir en debug
-#endif
-                    
+                    // En DEBUG la tirilla se genera como PDF con la impresora de Windows
+                    // ("Microsoft Print to PDF"), conservando el tamaño de la w80, para poder
+                    // revisarla sin hardware. En Release este camino no se compila.
+                    PrintDebugPdf();
+#else
                     _document.Print();
                     var wasSucess = MonitorPrintJobs();
                     if (!wasSucess) CleanPrintQueue();
                     recentImpressionSuccess = wasSucess;
+#endif
                 }
                 catch (Exception ex)
                 {
@@ -140,34 +162,272 @@ namespace Domain.Peripherals
                 if (_printData.Count <= 0) return;
                 if (e.Graphics == null) throw new Exception("La propiedad Graphics del evento Print es nula");
 
-                foreach (var printObj in _printData)
+                if (_printToPdfFile)
                 {
-                    _graphics = e.Graphics;
-
-                    if (printObj.QR != null)
-                    {
-                        _graphics.DrawImage(printObj.QR, printObj.X, printObj.Y);
-                    }
-                    else if (!string.IsNullOrEmpty(printObj.Image))
-                    {
-                        _graphics.DrawImage(Image.FromFile(printObj.Image), printObj.X, printObj.Y);
-                    }
-                    else if (printObj.Point.X != 0 && printObj.Point.Y != 0)
-                    {
-                        _graphics.DrawString(printObj.Text, printObj.Font, printObj.Brush, printObj.Point, printObj.Direction);
-                    }
-                    else
-                    {
-                        _graphics.DrawString(printObj.Text, printObj.Font, printObj.Brush, printObj.X, printObj.Y);
-                    }
+                    PrintReceiptToPdfPage(e);
+                    return;
                 }
 
+                DrawReceipt(e.Graphics);
             }
             catch (Exception ex)
             {
                 EventLogger.SaveLog(EventType.Error, $"Ocurrió un error en tiempo de ejecución: {ex.Message}", ex);
             }
         }
+
+        /// <summary>Dibuja la tirilla con las coordenadas originales del diseño.</summary>
+        private static void DrawReceipt(Graphics graphics)
+        {
+            foreach (var printObj in _printData)
+            {
+                _graphics = graphics;
+
+                if (printObj.QR != null)
+                {
+                    _graphics.DrawImage(printObj.QR, printObj.X, printObj.Y);
+                }
+                else if (!string.IsNullOrEmpty(printObj.Image))
+                {
+                    _graphics.DrawImage(Image.FromFile(printObj.Image), printObj.X, printObj.Y);
+                }
+                else if (printObj.Point.X != 0 && printObj.Point.Y != 0)
+                {
+                    _graphics.DrawString(printObj.Text, printObj.Font, printObj.Brush, printObj.Point, printObj.Direction);
+                }
+                else
+                {
+                    _graphics.DrawString(printObj.Text, printObj.Font, printObj.Brush, printObj.X, printObj.Y);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Dibuja la tirilla en un lienzo de 96 ppp (la resolución con la que están pensadas sus
+        /// coordenadas) y lo estira al ancho de la página. De ese modo el PDF conserva el ancho y
+        /// la escala de la tirilla de la w80, sin importar la resolución de la impresora de Windows.
+        /// </summary>
+        private static void PrintReceiptToPdfPage(PrintPageEventArgs e)
+        {
+            int pageWidthHundredthsInch = e.PageSettings.PaperSize?.Width ?? MillimetersToHundredthsInch(ReceiptWidthMm);
+            int canvasWidth = ReceiptCanvasWidthInPixels();
+            int canvasHeight = ReceiptContentHeightInPixels();
+
+            using var canvas = new Bitmap(canvasWidth, canvasHeight);
+            canvas.SetResolution((float)ReceiptDesignDpi, (float)ReceiptDesignDpi);
+            using (var canvasGraphics = Graphics.FromImage(canvas))
+            {
+                canvasGraphics.Clear(Color.White);
+                DrawReceipt(canvasGraphics);
+            }
+
+            // El lienzo ocupa exactamente el ancho de la página: nada se recorta y nada se deforma.
+            float pageWidthPx = (float)(e.Graphics.DpiX * pageWidthHundredthsInch / 100.0);
+            float scale = pageWidthPx / canvasWidth;
+            e.Graphics.DrawImage(canvas, 0f, 0f, pageWidthPx, canvasHeight * scale);
+        }
+
+        /// <summary>
+        /// Ancho del lienzo de la tirilla, en píxeles del diseño: el ancho de la w80 y, si el
+        /// contenido fuera más ancho, lo que necesite el contenido para no perder nada.
+        /// </summary>
+        private static int ReceiptCanvasWidthInPixels()
+        {
+            int w80WidthPixels = (int)Math.Round(ResolveW80WidthInHundredthsInch() / 100.0 * ReceiptDesignDpi);
+            return Math.Max(w80WidthPixels, MeasureReceiptContentWidth() + ReceiptSideMarginPx);
+        }
+
+        /// <summary>Ancho que ocupa el contenido de la tirilla, en píxeles del diseño.</summary>
+        private static int MeasureReceiptContentWidth()
+        {
+            int maxWidth = 0;
+
+            using var probe = new Bitmap(1, 1);
+            probe.SetResolution((float)ReceiptDesignDpi, (float)ReceiptDesignDpi);
+            using var probeGraphics = Graphics.FromImage(probe);
+
+            foreach (var printObj in _printData ?? new List<PrintObj>())
+            {
+                int itemWidth = 0;
+
+                if (printObj.QR != null)
+                {
+                    itemWidth = printObj.QR.Width;
+                }
+                else if (!string.IsNullOrEmpty(printObj.Image))
+                {
+                    itemWidth = MeasureImage(printObj.Image).width;
+                }
+                else if (!string.IsNullOrEmpty(printObj.Text) && printObj.Font != null)
+                {
+                    itemWidth = (int)Math.Ceiling(probeGraphics.MeasureString(printObj.Text, printObj.Font).Width);
+                }
+
+                maxWidth = Math.Max(maxWidth, printObj.X + itemWidth);
+            }
+
+            return maxWidth;
+        }
+
+        /// <summary>Alto que ocupa el contenido de la tirilla, en píxeles del diseño.</summary>
+        private static int ReceiptContentHeightInPixels()
+        {
+            int maxHeight = 0;
+
+            foreach (var printObj in _printData ?? new List<PrintObj>())
+            {
+                int itemHeight = 0;
+
+                if (printObj.QR != null)
+                {
+                    itemHeight = printObj.QR.Height;
+                }
+                else if (!string.IsNullOrEmpty(printObj.Image))
+                {
+                    itemHeight = MeasureImage(printObj.Image).height;
+                }
+                else if (printObj.Font != null)
+                {
+                    itemHeight = (int)Math.Ceiling(printObj.Font.GetHeight(ReceiptDesignDpi / 72.0));
+                }
+
+                maxHeight = Math.Max(maxHeight, printObj.Y + itemHeight);
+            }
+
+            return maxHeight + ReceiptBottomMarginPx;
+        }
+
+        /// <summary>Devuelve el tamaño de la imagen de la tirilla sin dejarla abierta.</summary>
+        private static (int width, int height) MeasureImage(string path)
+        {
+            try
+            {
+                using var image = Image.FromFile(path);
+                return (image.Width, image.Height);
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Warning, $"No se pudo medir la imagen de la tirilla '{path}': {ex.Message}");
+                return (0, 0);
+            }
+        }
+
+        private static int MillimetersToHundredthsInch(double millimeters) =>
+            (int)Math.Round(millimeters / 25.4 * 100.0);
+
+#if DEBUG
+        /// <summary>
+        /// Modo DEBUG: la tirilla se manda a la impresora de Windows (por defecto
+        /// "Microsoft Print to PDF") y se guarda como PDF, conservando el ancho y la escala de la
+        /// tirilla de la w80. En Release este camino no se compila: se sigue usando la w80.
+        /// </summary>
+        private static void PrintDebugPdf()
+        {
+            const string DefaultDebugPrinter = "Microsoft Print to PDF";
+
+            try
+            {
+                var printerName = AppConfig.Get("debugPrinterName");
+                if (string.IsNullOrWhiteSpace(printerName)) printerName = DefaultDebugPrinter;
+
+                _document.PrinterSettings.PrinterName = printerName;
+                if (!_document.PrinterSettings.IsValid)
+                {
+                    EventLogger.SaveLog(EventType.Warning,
+                        $"Modo DEBUG: la impresora '{printerName}' no está instalada, se omite la impresión de la tirilla.");
+                    recentImpressionSuccess = true;
+                    return;
+                }
+
+                var outputFolder = AppConfig.Get("debugPrintOutputFolder");
+                if (string.IsNullOrWhiteSpace(outputFolder)) outputFolder = "Receipts";
+                if (!Path.IsPathRooted(outputFolder))
+                    outputFolder = Path.Combine(AppInfo.APP_DIR, outputFolder);
+
+                Directory.CreateDirectory(outputFolder);
+                var filePath = Path.Combine(outputFolder, $"tirilla-{DateTime.Now:yyyyMMdd-HHmmss}.pdf");
+
+                var paperSize = BuildReceiptPaperSize();
+                _document.DefaultPageSettings.PaperSize = paperSize;
+                _document.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+                _document.PrinterSettings.PrintToFile = true;
+                _document.PrinterSettings.PrintFileName = filePath;
+                _printToPdfFile = true;
+
+                _document.Print();
+
+                EventLogger.SaveLog(EventType.Info,
+                    $"Modo DEBUG: tirilla generada en '{filePath}' con el tamaño de la w80 " +
+                    $"({paperSize.Width / 100.0:0.##} x {paperSize.Height / 100.0:0.##} pulgadas).");
+
+                OpenDebugPdf(filePath);
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Error, $"Error al generar la tirilla en PDF: {ex.Message}", ex);
+            }
+            finally
+            {
+                // En debug la tirilla no debe interrumpir el flujo del kiosco.
+                recentImpressionSuccess = true;
+            }
+        }
+
+        /// <summary>Abre el PDF generado para poder revisarlo (se controla con debugPrintOpenPdf).</summary>
+        private static void OpenDebugPdf(string filePath)
+        {
+            var openPdf = AppConfig.Get("debugPrintOpenPdf");
+            if (!string.Equals(openPdf, "true", StringComparison.OrdinalIgnoreCase)) return;
+            if (!File.Exists(filePath)) return;
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(filePath) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Warning, $"No se pudo abrir el PDF generado: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Tamaño de la tirilla: el ancho real de la w80 y el alto que ocupa el contenido, para
+        /// que el PDF salga con la misma forma y la misma escala que la tirilla impresa.
+        /// </summary>
+        private static PaperSize BuildReceiptPaperSize()
+        {
+            // La página mide lo mismo que el lienzo para que la tirilla salga a escala real:
+            // el ancho de la w80 y el alto que ocupa el contenido.
+            int width = (int)Math.Round(ReceiptCanvasWidthInPixels() / ReceiptDesignDpi * 100.0);
+            int height = (int)Math.Round(ReceiptContentHeightInPixels() / ReceiptDesignDpi * 100.0);
+
+            return new PaperSize("Tirilla w80", width, height);
+        }
+
+        /// <summary>Ancho de la w80 tomado de su propia cola de impresión, si está instalada.</summary>
+        private static int ResolveW80WidthInHundredthsInch()
+        {
+            try
+            {
+                using var w80 = new PrintDocument();
+                w80.PrinterSettings.PrinterName = W80_PRINTER_NAME;
+
+                if (w80.PrinterSettings.IsValid)
+                {
+                    var paperSize = w80.DefaultPageSettings.PaperSize;
+                    if (paperSize != null && paperSize.Width > 0)
+                        return paperSize.Width;
+                }
+            }
+            catch (Exception ex)
+            {
+                EventLogger.SaveLog(EventType.Warning,
+                    $"No se pudo leer el tamaño de la w80, se usa {ReceiptWidthMm} mm de ancho: {ex.Message}");
+            }
+
+            return MillimetersToHundredthsInch(ReceiptWidthMm);
+        }
+#endif
 
         private static bool MonitorPrintJobs()
         {
