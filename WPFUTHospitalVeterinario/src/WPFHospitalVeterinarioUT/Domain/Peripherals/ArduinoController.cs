@@ -1,6 +1,20 @@
-﻿using Domain.HantleDispenserAPI;
-using Domain.UIServices;
+// ────────────────────────────────────────────────────────────────────────────────
+// Reemplazo del controlador de periféricos. Versión de referencia: proyecto
+// WPF_LA_OFRENDA_V1 (Arduino que opera de forma estable en producción).
+// Adaptaciones respecto a esa versión, únicamente de integración:
+//   · namespace WPF_LA_OFRENDA_V1.Domain.Peripherals → Domain.Peripherals
+//   · using HantleDispenserAPI → Domain.HantleDispenserAPI
+//   · using WPF_LA_OFRENDA_V1.Domain.Utils → (AppConfig/EventLogger/EventType viven en Domain)
+// Se elimina por completo la compilación condicional DISPENSER_CONTROLLED_BY_ARDUINO:
+// los delegates quedan fijos en Dictionary<int,int>, que es lo que consume PaymentUC.
+// ────────────────────────────────────────────────────────────────────────────────
+using System;
+using System.Collections.Generic;
 using System.IO.Ports;
+using System.Linq;
+using System.Threading.Tasks;
+using Domain.HantleDispenserAPI;
+
 
 namespace Domain.Peripherals
 {
@@ -11,19 +25,14 @@ namespace Domain.Peripherals
         public static string DISPENSER_ON = "OR:ON:DP";//Operar billetero Dispenser
         public static string JCM_OFF = "OR:OFF:AP";//Cerrar billetero Aceptance
         public static string DISPENSER_OFF = "OR:OFF:DP";//Cerrar billetero Dispenser
-        public static string COIN_ACEPTANCE_ON = "OR:ON:AP";//Operar Monedero Aceptance
+        public static string COIN_ACEPTANCE_ON = "OR:ON:MA";//Operar Monedero Aceptance
         public static string COIN_DISPENSE_ON = "OR:ON:MD:";//Operar Monedero Dispenser
-        public static string COIN_ACEPTANCE_OFF = "OR:OFF:AP";//Cerrar Monedero Aceptance
+        public static string COIN_ACEPTANCE_OFF = "OR:OFF:MA";//Cerrar Monedero Aceptance
     }
 
     public delegate void CashInHandler(decimal value);
-#if DISPENSER_CONTROLLED_BY_ARDUINO
-    public delegate void CashDispensedHandler(decimal value, Dictionary<string, int> details);
-    public delegate void DispenserRejectHandler(Dictionary<string, int> dataReject);
-#else
     public delegate void CashDispensedHandler(decimal value, Dictionary<int, int> details);
     public delegate void DispenserRejectHandler(Dictionary<int, int> dataReject);
-#endif
     public delegate void PeripheralErrorHandler(Exception ex);
     public class ArduinoController
     {
@@ -71,21 +80,15 @@ namespace Domain.Peripherals
 
         public static void Reset()
         {
-            if (_instance == null) return;
-
-            _instance._serialPort.Close();
-            _instance._mei.CloseAcceptor();
             _instance = null;
-            // Initialize peripherals ports and connections
-            string arduinoPort = AppConfig.Get("arduinoPort");
-            string dispenserDenominations = AppConfig.Get("dispenserDenominations");
-            Initialize(arduinoPort, dispenserDenominations);
         }
 
         /* ------ Atributos y metodos de clase ---------------*/
         private ArduinoController() { }
 
         #region Atributes
+        private const string _STR_TIMER = "01:00";
+     
 
         private SerialPort _serialPort;
 
@@ -111,23 +114,19 @@ namespace Domain.Peripherals
         private decimal _amountToDispense;//Valor a dispensar
         private bool _arduinoStatusError;
 
-#if DISPENSER_CONTROLLED_BY_ARDUINO
         //Monedero
-#endif
         private string _arduinoErrDescription = string.Empty;
         private string _valuesOK_DP = string.Empty;
         private string _valuesOK_MD = string.Empty;
         private string _valuesBX_DP = string.Empty;
         private string _rawReturnCoins = string.Empty;
+
         private bool _peripheralStartSuccess = false;
         private static string ArduinoToken;//Llave que retorna el dispenser
 
         private string _acceptorDevice = string.Empty;
 
         private HandlerAcceptorProcess _hAcceptorProcess;
-        private HandlerDispenserProcess _hDispenseProcess;
-#if DISPENSER_CONTROLLED_BY_ARDUINO
-#endif
         #endregion
 
         #region Events
@@ -146,13 +145,7 @@ namespace Domain.Peripherals
             PeripheralError?.Invoke(ex);
         }
 
-        public void ClearEvents()
-        {
-            CashDispensed = null;
-            CashIn = null;
-            PeripheralError = null;
-            DispenserReject = null;
-        }
+
 
         #endregion
 
@@ -225,7 +218,7 @@ namespace Domain.Peripherals
         /// <summary>
         /// Método que inicializa los billeteros
         /// </summary>
-        public async Task<bool> SendStart(bool ignoreDispenser = false)
+        public async Task<bool> SendStart()
         {
             try
             {
@@ -233,15 +226,8 @@ namespace Domain.Peripherals
                 ArduinoToken = string.Empty;
 
                 _hAcceptorProcess = new HandlerAcceptorProcess();
-#if DISPENSER_CONTROLLED_BY_ARDUINO
-                _hDispenseProcess = new HandlerDispenserProcess();
-#else
-                if (!ignoreDispenser)
-                {
-                    if (!await Dispenser.Start())
-                        return false;
-                }
-#endif
+                if (!await Dispenser.Start())
+                    return false;
 
                 if (!SendDataArduino(ArduinoCommand.START))
                 {
@@ -510,9 +496,6 @@ namespace Domain.Peripherals
             CashDispensed = null;
             DispenserReject = null;
             PeripheralError = null;
-#if DISPENSER_CONTROLLED_BY_ARDUINO
-            _hDispenseProcess = new HandlerDispenserProcess();
-#endif
             _hAcceptorProcess = new HandlerAcceptorProcess();
         }
 
@@ -529,28 +512,18 @@ namespace Domain.Peripherals
                 _arduinoStatusError = false;
                 _arduinoErrDescription = string.Empty;
                 _amountToDispense = valueDispenser;
-#if DISPENSER_CONTROLLED_BY_ARDUINO
 
-                bool isReadyToDispend = SetDenominations();
-
-                if (!isReadyToDispend) throw new Exception("Error tratando de validar el valor de dispensación");
-
-                SendDispense(_amountToDispense.ToString());
-
-                //ActivateTimer();
-#else
                 await Dispenser.DispenseAmount((int)_amountToDispense);
                 DeliveryVal += Dispenser.DispensedValue;
                 DispenserReject?.Invoke(Dispenser.RejectData);
                 if (Dispenser.CoinsValue <= 0 || Dispenser.CoinsValue > 1900)
                 {
-                    _rawReturnCoins = "500-0;200-0;100-0";
+                    _rawReturnCoins = "500-0;100-0";
                     FinishDispensation();
                     return;
                 }
 
                 SendDispense(Dispenser.CoinsValue.ToString());
-#endif
 
             }
             catch (Exception ex)
@@ -561,29 +534,6 @@ namespace Domain.Peripherals
             }
         }
 
-        private bool SetDenominations()
-        {
-            try
-            {
-                if (_amountToDispense <= 0 || _availDenomsDispenser.Count <= 0)
-                    throw new Exception("la cantidad dispensar es 0 o no hay items en la lista de denominaciones.");
-
-                foreach (var denomination in _availDenomsDispenser)
-                {
-                    if (denomination.Item1.Equals("DP"))
-                    {
-                        _hDispenseProcess.Denominations.Add(denomination.Item2);
-                    }
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.P_Arduino, $"Ocurrió un error en tiempo de ejecución: {ex.Message}", ex);
-                return false;
-            }
-        }
 
 
         /// <summary>
@@ -638,18 +588,9 @@ namespace Domain.Peripherals
                         int cantidad = Convert.ToInt32(value.Split('-')[1]);
                         DeliveryVal += denominacion * cantidad;
                     }
-                }
-#if DISPENSER_CONTROLLED_BY_ARDUINO
-                else if (typeTO == "BX")
-                {
-                    //Formato ej: 10000-1;2000-2;2000-0
-                    _hDispenseProcess.CalculateRejectedBills();
-                    var rejectData = DeserializeDispenserResponse(_hDispenseProcess.CalculatedReject);
-                    if (_hDispenseProcess.RejectFlag)
-                        DispenserReject?.Invoke(rejectData);
 
                 }
-#endif
+
                 if (isCoinsReturn)
                 {
 
@@ -667,16 +608,6 @@ namespace Domain.Peripherals
 
         private void FinishDispensation()
         {
-#if DISPENSER_CONTROLLED_BY_ARDUINO
-
-            _hDispenseProcess.RemainingValue = (int)(_deliveryAmount - DeliveryVal);
-            var details = DeserializeDispenserResponse(_hDispenseProcess.RealReturn);
-            //StopTimer();
-            EventLogger.SaveLog(EventType.P_Arduino, $"Valor de devuelta total del dispensador {DeliveryVal}");
-            CashDispensed?.Invoke(DeliveryVal, details);
-            ClearValues();
-
-#else
             var details = DeserializeDispenserResponse(_rawReturnCoins);
             foreach (var denom in details.Keys)
             {
@@ -685,7 +616,6 @@ namespace Domain.Peripherals
             EventLogger.SaveLog(EventType.P_Arduino, $"Valor de devuelta total {DeliveryVal}");
             CashDispensed?.Invoke(DeliveryVal, Dispenser.DispensedData);
             ClearValues();
-#endif
         }
 
         #endregion
@@ -703,7 +633,7 @@ namespace Domain.Peripherals
                 bool isSuccess = false;
                 if (_acceptorDevice == "MEI") isSuccess = _mei.EnableAcceptance();
                 else isSuccess = SendDataArduino(ArduinoCommand.JCM_ON);
-                //isSuccess &= SendDataArduino(ArduinoCommand.COIN_ACEPTANCE_ON);
+
                 if (!isSuccess) throw new Exception("No se pudo iniciar el aceptador. Respuesta negativa");
             }
             catch (Exception ex)
@@ -727,49 +657,14 @@ namespace Domain.Peripherals
                 SendDataArduino(ArduinoCommand.JCM_OFF);
                 await Task.Delay(300); //Tiempo para que no se envíe ningún comando mientras se apaga
             }
-            SendDataArduino(ArduinoCommand.COIN_ACEPTANCE_OFF);
-
         }
         #endregion
 
-#if DISPENSER_CONTROLLED_BY_ARDUINO
         private Dictionary<string, int> DeserializeDispenserResponse(string res)
         {
             try
             {
-                if (string.IsNullOrEmpty(res)) res = "10000-0;2000-0";
-                if (res.Last() == ';') res = res.Substring(0, res.Length - 1);
-                var resDenoms = res.Split(";");
-                Dictionary<string, int> resDeserialized = new();
-                foreach (var denom in resDenoms)
-                {
-                    var denomValue = denom.Split("-")[0];
-                    var quantity = Convert.ToInt32(denom.Split("-")[1]);
-                    if (resDeserialized.ContainsKey(denomValue))
-                        continue;
-                    resDeserialized.Add(denomValue, quantity);
-
-                }
-                return resDeserialized;
-            }
-            catch (Exception ex)
-            {
-                EventLogger.SaveLog(EventType.Error, $"Ocurrió un error en tiempo de ejecución: {ex.Message}", ex);
-                Dictionary<string, int> resDeserialized = new();
-                foreach (var denom in _hDispenseProcess.Denominations)
-                {
-                    resDeserialized.Add(denom.ToString(), 0);
-                }
-                return resDeserialized;
-
-            }
-        }
-#else
-        private Dictionary<string, int> DeserializeDispenserResponse(string res)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(res)) res = "500-0;200-0;100-0";
+                if (string.IsNullOrEmpty(res)) res = "500-0;100-0";
                 if (res.Last() == ';') res = res.Substring(0, res.Length - 1);
                 var resDenoms = res.Split(";");
                 Dictionary<string, int> resDeserialized = new();
@@ -790,40 +685,14 @@ namespace Domain.Peripherals
                 Dictionary<string, int> resDeserialized = new()
                 {
                     { "500", 0 },
-                    { "200", 0 },
                     { "100", 0 }
                 };
                 return resDeserialized;
 
             }
         }
-#endif
 
 
-        #region "TimerInactividad"
-        //private void ActivateTimer()
-        //{
-
-
-        //    _timer = new TimerGeneric(_STR_TIMER);
-        //    _timer.CallBackTimeOut = () =>
-        //    {
-
-        //        _timer.CallBackTimeOut = null;
-        //        CashDispensed?.Invoke(DeliveryVal, DeserializeDispenserResponse(_hDispenseProcess.RealReturn));
-
-        //    };
-
-
-        //}
-
-        //private void StopTimer()
-        //{
-        //    _timer.CallBackTimeOut = null;
-        //    _timer.CallBackTick = null;
-        //    _timer.CallBackStop?.Invoke();
-        //}
-        #endregion
     }
 
     internal class HandlerDispenserProcess
@@ -832,27 +701,16 @@ namespace Domain.Peripherals
         public string ValuesOK_MD { get; set; } = string.Empty;
         public string ValuesBX_DP { get; set; } = string.Empty;
         public List<int> Denominations { get; set; } = new List<int>();
-        public string CalculatedReturn { get; set; } = string.Empty;
         public string RealReturn { get; set; } = string.Empty;
-        public string CalculatedReject { get; set; } = string.Empty;
-        public bool RejectFlag { get; set; } = false;
         public int ValueToDispend { get; set; } = 0;
         public int RemainingValue { get; set; }
-        public bool HasToReturnCoins { get; set; } = false;
-        public bool IsInit { get; set; } = false;
+
         public string LastError { get; set; } = string.Empty;
-        public int MotorError { get; set; } = 0;
-        public Queue<int> BufferRetry { get; set; } = new Queue<int>();
-        public HandlerDispenserProcess(int valueToDispend, List<int> denominations)
+
+        public HandlerDispenserProcess(List<int> denominations)
         {
-            LastError = string.Empty;
-            ValuesBX_DP = string.Empty;
-            ValuesOK_DP = string.Empty;
-            ValuesOK_MD = string.Empty;
-            ValueToDispend = valueToDispend;
+
             Denominations = denominations;
-            IsInit = true;
-            this.CalculateReturnBills();
         }
         public HandlerDispenserProcess()
         {
@@ -863,60 +721,6 @@ namespace Domain.Peripherals
             Denominations = new List<int>();
         }
 
-
-
-        public string CalculateReturnBills()
-        {
-            //Ordenar las denominaciones
-            Denominations = Denominations.OrderBy(x => x).ToList();
-
-            if (ValueToDispend < 2000)
-            {
-                CalculatedReturn += $"10000-0;2000-0;2000-0";
-                HasToReturnCoins = true;
-                return CalculatedReturn;
-
-            }
-
-            int totalToDispend = ValueToDispend;
-            int i = 0;
-            while (totalToDispend >= 2000)
-            {
-                int denomination = Denominations[i];
-                int billsCount = (int)(totalToDispend / denomination);
-                CalculatedReturn += $"{denomination}-{billsCount};";
-                totalToDispend -= (billsCount * denomination);
-                i++;
-            }
-            CalculatedReturn = CalculatedReturn.Substring(0, CalculatedReturn.Length - 1);
-            if (totalToDispend > 0) HasToReturnCoins = true;
-            return CalculatedReturn;
-        }
-
-        public string CalculateRejectedBills()
-        {
-            CalculatedReject = string.Empty;
-            string[] OKValues = ValuesOK_DP.Split(';');
-            string[] BXValues = ValuesBX_DP.Split(';');
-
-            for (int i = 0; i < OKValues.Length; i++)
-            {
-
-                string denominacion = OKValues[i].Split('-')[0];
-
-                int cantidadOK = Convert.ToInt32(OKValues[i].Split('-')[1]);
-                int cantidadBX = Convert.ToInt32(BXValues[i].Split('-')[1]);
-
-                int diff = cantidadBX - cantidadOK;
-                if (diff > 0) RejectFlag = true;
-                CalculatedReject += $"{denominacion}-{diff};";
-            }
-
-            //Formato ej: 10000-1;2000-2
-            CalculatedReject = CalculatedReject.Substring(0, CalculatedReject.Length - 1);
-            return CalculatedReject;
-
-        }
 
 
 
