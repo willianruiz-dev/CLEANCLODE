@@ -163,7 +163,17 @@ namespace WPFHospitalVeterinarioUT.ApiService
                     var hospitalTransaction = await _hospitalTransactions.CreateAsync(
                         ToHospitalTransaction(transactionCreated));
                     if (hospitalTransaction != null)
+                    {
                         ts.IdTransaccionUt = hospitalTransaction.TransactionId;
+                    }
+                    else
+                    {
+                        // El cobro en el Dashboard ya quedó; la sincronización con la base de la
+                        // universidad es secundaria (ver HospitalTransactionService), pero si falla
+                        // hay que dejarlo dicho aquí, en el log de la aplicación, y no en silencio.
+                        EventLogger.SaveLog(EventType.Error,
+                            "La transacción quedó creada en el Dashboard pero NO se registró en la API UT: el pago no aparecerá en la base de la universidad. Ver Log_integration para el detalle del error.");
+                    }
 
                     EventLogger.SaveLog(EventType.Info, "Respuesta: Creación de transacción Dashboard", requestresponse);
                     return requestresponse.response;
@@ -222,6 +232,11 @@ namespace WPFHospitalVeterinarioUT.ApiService
                         var hospitalTransaction = ToHospitalTransaction(transactionUpdated);
                         hospitalTransaction.TransactionId = ts.IdTransaccionUt;
                         await _hospitalTransactions.UpdateAsync(hospitalTransaction);
+                    }
+                    else
+                    {
+                        EventLogger.SaveLog(EventType.Error,
+                            "La transacción no se sincronizó con la API UT (no hay IdTransaccionUt); la actualización solo quedó aplicada en el Dashboard.");
                     }
 
                     EventLogger.SaveLog(EventType.Info, "Respuesta: Actualización de transacción Dashboard", requestresponse);

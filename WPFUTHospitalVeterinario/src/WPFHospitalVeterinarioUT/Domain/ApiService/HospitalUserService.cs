@@ -40,7 +40,13 @@ namespace WPFHospitalVeterinarioUT.ApiService
                 cancellationToken).ConfigureAwait(false);
 
             if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                // Antes este caso no dejaba rastro en ningún log: la aplicación simplemente
+                // pedía los datos en el formulario y nadie podía saber si el documento existía.
+                EventLogger.SaveLog(EventType.Info,
+                    $"El documento {document} no está registrado en la API UT (HTTP 404); los datos se solicitan en el formulario.");
                 return null;
+            }
 
             var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
