@@ -3,8 +3,6 @@ using Domain.HantleDispenserAPI;
 using Domain.Peripherals;
 using Domain.UIServices;
 using Domain.Variables;
-using LocalDataBase;
-using Microsoft.EntityFrameworkCore;
 using System;
 using System.Windows;
 using System.Windows.Input;

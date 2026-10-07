@@ -3,8 +3,6 @@ using Domain.Enumerables;
 using Domain.Peripherals.Recorder;
 using Domain.UIServices.Integrations;
 using Domain.UIServices.Models;
-using LocalDataBase;
-using LocalDataBase.Services;
 using System.ComponentModel;
 using WPFHospitalVeterinarioUT.ApiService;
 
@@ -208,29 +206,6 @@ namespace Domain.UIServices
             this.DocumentType = string.Empty;
             this.Mobile = string.Empty;
             this.Email = string.Empty;
-        }
-
-        public void AssignValues(DB_UserPersonalInfo user)
-        {
-
-            this.FirstName = user.Name;
-            this.LastName = user.LastName;
-            this.Document = user.Document;
-            this.DocumentType = user.DocumentType;
-            this.Mobile = user.Mobile;
-            this.Email = user.Email;
-        }
-
-        public DB_UserPersonalInfo GenerateDBUserPersonalInfo()
-        {
-            var user = new DB_UserPersonalInfo();
-            user.Name = this.FirstName;
-            user.LastName = this.LastName;
-            user.Document = this.Document;
-            user.DocumentType = this.DocumentType;
-            user.Mobile = this.Mobile;
-            user.Email = this.Email;
-            return user;
         }
     }
 }

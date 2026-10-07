@@ -3,7 +3,6 @@ using ApiService.QueueModels;
 using Domain;
 using Domain.Enumerables;
 using Domain.UIServices;
-using LocalDataBase;
 using Newtonsoft.Json;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -159,17 +158,6 @@ namespace WPFHospitalVeterinarioUT.ApiService
                     var transactionCreated = requestresponse.response;
                     ts.transactionProcess.ApiDto = transactionCreated;
                     ts.IdTransaccionApi = transactionCreated.Id;
-
-                    // Se guarda la transaccion en la base de datos local
-                    var mapper = ObjMapper.Instance;
-                    if (!await DB_TransactionService.Create(mapper.Map<DB_Transaction>(transactionCreated)))
-                    {
-                        EventLogger.SaveLog(EventType.Error, "No se pudo crear la transacción de manera local. Detalle: " + DB_TransactionService.LastError);
-                    }
-                    else
-                    {
-                        EventLogger.SaveLog(EventType.Info, "Transacción guardada en SQLite exitosamente. ID: " + transactionCreated.Id);
-                    }
                     EventLogger.SaveLog(EventType.Info, "Respuesta: Creación de transacción Dashboard", requestresponse);
                     return requestresponse.response;
                 }
@@ -220,16 +208,6 @@ namespace WPFHospitalVeterinarioUT.ApiService
                 {
                     var transactionUpdated = requestresponse.response;
                     ts.transactionProcess.ApiDto = transactionUpdated;
-                    // Se guarda la transaccion en la base de datos local
-                    var mapper = ObjMapper.Instance;
-                    if (!await DB_TransactionService.Update(mapper.Map<DB_Transaction>(transactionUpdated)))
-                    {
-                        EventLogger.SaveLog(EventType.Error, "No se pudo actualizar la transacción de manera local. Detalle: " + DB_TransactionService.LastError);
-                    }
-                    else
-                    {
-                        EventLogger.SaveLog(EventType.Info, "Transacción actualizada en SQLite exitosamente. ID: " + transactionUpdated.Id);
-                    }
                     EventLogger.SaveLog(EventType.Info, "Respuesta: Actualización de transacción Dashboard", requestresponse);
                     return requestresponse.response;
                 }
@@ -278,20 +256,6 @@ namespace WPFHospitalVeterinarioUT.ApiService
                 if (requestresponse.statusCode == 200)
                 {
                     var listTransactionsCreated = requestresponse.response;
-                    // Se guarda el detalle en la base de datos local
-                    var mapper = ObjMapper.Instance;
-                    foreach (var transactionDetailCreated in listTransactionsCreated)
-                    {
-                        if (!await DB_TransactionService.CreateDetail(mapper.Map<DB_TransactionDetail>(transactionDetailCreated)))
-                        {
-                            EventLogger.SaveLog(EventType.Error, "No se pudo actualizar la transacción de manera local. Detalle: " + DB_TransactionService.LastError, transactionDetailCreated);
-                        }
-                        else
-                        {
-                            EventLogger.SaveLog(EventType.Info, "Detalle guardado en SQLite exitosamente. ID: " + transactionDetailCreated.Id);
-                        }
-                    }
-
                     return listTransactionsCreated;
                 }
 

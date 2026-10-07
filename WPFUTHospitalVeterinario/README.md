@@ -25,8 +25,8 @@ graph TB
         subgraph "Servicios"
             K[EventLogger]
             L[EmailSender]
-            M[DB_PersonalInfoService]
-            N[DB_TransactionService]
+            M[API de información personal]
+            N[ApiDashboard]
         end
     end
     
@@ -151,45 +151,6 @@ flowchart TD
 
 ```mermaid
 erDiagram
-    DB_UserPersonalInfo {
-        string Document PK
-        string DocumentType
-        string Name
-        string LastName
-        string Mobile
-        string Email
-    }
-    
-    DB_Transaction {
-        int TransactionId PK
-        string IdApi
-        string Document FK
-        string Reference
-        string Product
-        decimal TotalAmount
-        decimal RealAmount
-        decimal IncomeAmount
-        decimal ReturnAmount
-        string Description
-        int IdStateTransaction
-        string StateTransaction
-        datetime DateCreated
-        datetime DateUpdated
-    }
-    
-    DB_TransactionDetail {
-        int TranDetailId PK
-        string IdApi
-        int IdTransaction FK
-        int IdCurrencyDenomination
-        string CurrencyDenomination
-        int IdTypeOperation
-        string TypeOperation
-        datetime DateCreated
-    }
-    
-    DB_UserPersonalInfo ||--o{ DB_Transaction : "tiene"
-    DB_Transaction ||--o{ DB_TransactionDetail : "contiene"
 ```
 
 ## Componentes Principales
